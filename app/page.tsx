@@ -718,7 +718,7 @@ function StoryCard({
               aria-label="Like story"
             >
               <Heart size={16} fill={liked ? "currentColor" : "none"} />
-              <span>{story.likes + (liked ? 1 : 0)}</span>
+              <span>{story.likes}</span>
             </button>
             <button
               className={saved ? "saved" : ""}
