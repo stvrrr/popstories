@@ -42,6 +42,7 @@ type Story = {
   date: string;
   accent: string;
   likes: number;
+  avatarUrl: string;
 };
 type Profile = { username: string; display_name: string; bio: string; avatar_url: string };
 const PAGE_LIMIT = 620;
@@ -78,7 +79,7 @@ export default function HomePage() {
     const { data } = await supabase
       .from("stories")
       .select(
-        "id,title,excerpt,category,created_at,author_id,profiles!stories_author_id_fkey(username,display_name),likes(count)",
+        "id,title,excerpt,category,created_at,author_id,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)",
       )
       .eq("status", "published")
       .eq("visibility", "public")
@@ -89,7 +90,7 @@ export default function HomePage() {
       excerpt: string | null;
       category: string | null;
       created_at: string;
-      profiles: { username: string; display_name: string } | { username: string; display_name: string }[] | null;
+      profiles: { username: string; display_name: string; avatar_url: string | null } | { username: string; display_name: string; avatar_url: string | null }[] | null;
       likes: Array<{ count: number }>;
     }>;
     setStories(
@@ -109,6 +110,7 @@ export default function HomePage() {
         date: new Date(story.created_at).toLocaleDateString(),
         accent: ["sage", "terracotta", "mustard"][index % 3],
         likes: story.likes?.[0]?.count ?? 0,
+        avatarUrl: profile?.avatar_url ?? "",
         };
       }),
     );
@@ -675,9 +677,7 @@ function StoryCard({
         <p>{story.excerpt}</p>
         <div className="story-card-bottom">
           <button className="author-chip" onClick={(event) => { event.stopPropagation(); onFollow(); }}>
-            <span className={`avatar avatar-${story.accent}`}>
-              {story.initials}
-            </span>
+            {story.avatarUrl ? <img className="avatar avatar-image" src={story.avatarUrl} alt="" /> : <span className={`avatar avatar-${story.accent}`}>{story.initials}</span>}
             <span>
               <strong>{story.author}</strong>
               <small>{following ? "Following" : `@${story.handle}`}</small>
@@ -1388,6 +1388,11 @@ function Writer({
   );
 }
 
+function FormattedStoryText({ text }: { text: string }) {
+  const paragraphs = text.split(/\n\s*\n/).filter(Boolean);
+  return <>{paragraphs.map((paragraph, paragraphIndex) => <p key={`${paragraphIndex}-${paragraph.slice(0, 12)}`}>{paragraph.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => part.startsWith("**") && part.endsWith("**") ? <strong key={index}>{part.slice(2, -2)}</strong> : part.startsWith("*") && part.endsWith("*") ? <em key={index}>{part.slice(1, -1)}</em> : <span key={index}>{part}</span>)}</p>)}</>;
+}
+
 function ReaderModal({
   story,
   liked,
@@ -1405,6 +1410,15 @@ function ReaderModal({
   onSave: () => void;
   onShare: () => void;
 }) {
+  const [pages, setPages] = useState<string[]>([story.excerpt]);
+  const [pageIndex, setPageIndex] = useState(0);
+  useEffect(() => {
+    let active = true;
+    supabase.from("story_pages").select("page_number,content").eq("story_id", story.id).order("page_number", { ascending: true }).then(({ data }) => {
+      if (active && data?.length) { setPages(data.map((page) => page.content)); setPageIndex(0); }
+    });
+    return () => { active = false; };
+  }, [story.id, story.excerpt]);
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <article
@@ -1426,9 +1440,7 @@ function ReaderModal({
           <span className="story-category">{story.category}</span>
           <h2>{story.title}</h2>
           <div className="reader-author">
-            <span className={`avatar avatar-${story.accent}`}>
-              {story.initials}
-            </span>
+            {story.avatarUrl ? <img className="avatar avatar-image" src={story.avatarUrl} alt="" /> : <span className={`avatar avatar-${story.accent}`}>{story.initials}</span>}
             <span>
               <strong>{story.author}</strong>
               <small>
@@ -1441,19 +1453,9 @@ function ReaderModal({
             </button>
           </div>
           <div className="reader-body">
-            <p>{story.excerpt}</p>
-            <p>
-              There are days when a story begins before we know to call it one.
-              It lives in the small details: the warmth of a cup held between
-              both hands, the familiar face across the room, the pause before a
-              door opens.
-            </p>
-            <p>
-              Maybe that is why we keep coming back to the same places. Not
-              because they never change, but because they let us notice when we
-              do.
-            </p>
+            <FormattedStoryText text={pages[pageIndex] ?? ""} />
           </div>
+          <div className="reader-pages"><button onClick={() => setPageIndex(Math.max(0, pageIndex - 1))} disabled={pageIndex === 0}><ChevronLeft size={16} /></button><span>Page {pageIndex + 1} of {pages.length}</span><button onClick={() => setPageIndex(Math.min(pages.length - 1, pageIndex + 1))} disabled={pageIndex === pages.length - 1}><ChevronRight size={16} /></button></div>
           <div className="reader-actions">
             <button onClick={onLike} className={liked ? "liked" : ""}>
               <Heart size={17} fill={liked ? "currentColor" : "none"} />{" "}
