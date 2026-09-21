@@ -479,12 +479,14 @@ export default function HomePage() {
       {readingStory && (
         <ReaderModal
           story={readingStory}
+          user={user}
           liked={liked.includes(readingStory.id)}
           saved={saved.includes(readingStory.id)}
           onClose={() => setReadingStory(null)}
           onLike={() => toggleLike(readingStory)}
           onSave={() => toggleSave(readingStory)}
           onShare={() => void shareStory(readingStory)}
+          onViewError={(message) => notify(`View was not recorded: ${message}`)}
         />
       )}
       {authOpen && (
@@ -1436,20 +1438,24 @@ function FormattedStoryText({ text }: { text: string }) {
 
 function ReaderModal({
   story,
+  user,
   liked,
   saved,
   onClose,
   onLike,
   onSave,
   onShare,
+  onViewError,
 }: {
   story: Story;
+  user: User | null;
   liked: boolean;
   saved: boolean;
   onClose: () => void;
   onLike: () => void;
   onSave: () => void;
   onShare: () => void;
+  onViewError: (message: string) => void;
 }) {
   const [pages, setPages] = useState<string[]>([story.excerpt]);
   const [pageIndex, setPageIndex] = useState(0);
@@ -1461,8 +1467,10 @@ function ReaderModal({
     return () => { active = false; };
   }, [story.id, story.excerpt]);
   useEffect(() => {
-    void supabase.from("story_views").insert({ story_id: story.id });
-  }, [story.id]);
+    supabase.from("story_views").insert({ story_id: story.id, user_id: user?.id ?? null }).then(({ error }) => {
+      if (error) onViewError(error.message);
+    });
+  }, [story.id, user?.id]);
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <article
