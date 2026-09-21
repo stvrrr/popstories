@@ -124,6 +124,16 @@ export default function HomePage() {
     void loadStories();
     return () => listener.subscription.unsubscribe();
   }, [supabase]);
+  useEffect(() => {
+    if (!user) { setLiked([]); setSaved([]); return; }
+    Promise.all([
+      supabase.from("likes").select("story_id").eq("user_id", user.id),
+      supabase.from("favorites").select("story_id").eq("user_id", user.id),
+    ]).then(([likesResult, favoritesResult]) => {
+      setLiked((likesResult.data ?? []).map((row) => row.story_id));
+      setSaved((favoritesResult.data ?? []).map((row) => row.story_id));
+    });
+  }, [user]);
   const notify = (message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(""), 2400);
@@ -160,23 +170,31 @@ export default function HomePage() {
     await supabase.auth.signOut();
     notify("You have been signed out");
   };
-  const toggleLike = (story: Story) =>
-    setLiked((current) =>
-      current.includes(story.id)
-        ? current.filter((id) => id !== story.id)
-        : [...current, story.id],
-    );
-  const toggleSave = (story: Story) => {
-    setSaved((current) =>
-      current.includes(story.id)
-        ? current.filter((id) => id !== story.id)
-        : [...current, story.id],
-    );
-    notify(
-      saved.includes(story.id)
-        ? "Removed from your shelf"
-        : "Saved to your shelf",
-    );
+  const toggleLike = async (story: Story) => {
+    if (!user) { setAuthMode("login"); setAuthOpen(true); return; }
+    const alreadyLiked = liked.includes(story.id);
+    const result = alreadyLiked
+      ? await supabase.from("likes").delete().eq("user_id", user.id).eq("story_id", story.id)
+      : await supabase.from("likes").insert({ user_id: user.id, story_id: story.id });
+    if (result.error) { notify(result.error.message); return; }
+    setLiked((current) => alreadyLiked ? current.filter((id) => id !== story.id) : [...current, story.id]);
+    await loadStories();
+  };
+  const toggleSave = async (story: Story) => {
+    if (!user) { setAuthMode("login"); setAuthOpen(true); return; }
+    const alreadySaved = saved.includes(story.id);
+    const result = alreadySaved
+      ? await supabase.from("favorites").delete().eq("user_id", user.id).eq("story_id", story.id)
+      : await supabase.from("favorites").insert({ user_id: user.id, story_id: story.id });
+    if (result.error) { notify(result.error.message); return; }
+    setSaved((current) => alreadySaved ? current.filter((id) => id !== story.id) : [...current, story.id]);
+    notify(alreadySaved ? "Removed from your shelf" : "Saved to your shelf");
+  };
+  const shareStory = async (story: Story) => {
+    const result = await supabase.from("story_shares").insert({ story_id: story.id, user_id: user?.id ?? null });
+    if (result.error) { notify(result.error.message); return; }
+    try { await navigator.clipboard.writeText(`${window.location.origin}/?story=${story.id}`); } catch { /* Clipboard access can be unavailable in some browsers. */ }
+    notify("Story link copied to your clipboard");
   };
   const updatePage = (value: string) => {
     const next = [...pages];
@@ -466,7 +484,7 @@ export default function HomePage() {
           onClose={() => setReadingStory(null)}
           onLike={() => toggleLike(readingStory)}
           onSave={() => toggleSave(readingStory)}
-          onShare={() => notify("Story link copied to your clipboard")}
+          onShare={() => void shareStory(readingStory)}
         />
       )}
       {authOpen && (
@@ -747,7 +765,7 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
     if (error) { setMessage(error.code === "23505" ? "That username is already taken." : error.code === "PGRST116" ? "Your profile record is missing. Run the profile setup SQL in Supabase first." : error.message); return; }
     setProfile({ ...profile, avatar_url: avatarUrl }); setAvatarFile(null); await onSaved();
   };
-  return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="quiet-button" onClick={onSignOut}>Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
+  return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="quiet-button" onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}>Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
 }
 
 function ShelfView({ user, onWrite, onEdit, onDelete }: { user: User | null; onWrite: () => void; onEdit: (storyId: string) => void; onDelete: (storyId: string) => void }) {
@@ -1442,6 +1460,9 @@ function ReaderModal({
     });
     return () => { active = false; };
   }, [story.id, story.excerpt]);
+  useEffect(() => {
+    void supabase.from("story_views").insert({ story_id: story.id });
+  }, [story.id]);
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <article
