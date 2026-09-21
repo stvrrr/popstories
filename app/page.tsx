@@ -276,7 +276,7 @@ export default function HomePage() {
           </div>
           <div>
             <strong>{user ? user.email : "Sign in to Flip Stories"}</strong>
-            <span>{user ? "Sign out" : "Read, write, and follow"}</span>
+            <span>{user ? "Edit profile" : "Read, write, and follow"}</span>
           </div>
           <ChevronDown size={15} />
         </button>
@@ -314,6 +314,10 @@ export default function HomePage() {
           >
             <Bookmark size={18} />
             <span>My shelf</span>
+          </button>
+          <button className={`nav-item ${view === "Profile" ? "active" : ""}`} onClick={() => { if (user) setView("Profile"); else setAuthOpen(true); setMenuOpen(false); }}>
+            <Users size={18} />
+            <span>Profile settings</span>
           </button>
         </nav>
         <div className="sidebar-bottom">
@@ -729,9 +733,9 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
       if (uploadError) { setMessage(`Avatar upload failed: ${uploadError.message}`); setSaving(false); return; }
       avatarUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
     }
-    const { error } = await supabase.from("profiles").update({ username: profile.username.trim().toLowerCase(), display_name: profile.display_name.trim(), bio: profile.bio.trim(), avatar_url: avatarUrl }).eq("id", user.id);
+    const { error } = await supabase.from("profiles").update({ username: profile.username.trim().toLowerCase(), display_name: profile.display_name.trim(), bio: profile.bio.trim(), avatar_url: avatarUrl }).eq("id", user.id).select("id").single();
     setSaving(false);
-    if (error) { setMessage(error.code === "23505" ? "That username is already taken." : error.message); return; }
+    if (error) { setMessage(error.code === "23505" ? "That username is already taken." : error.code === "PGRST116" ? "Your profile record is missing. Run the profile setup SQL in Supabase first." : error.message); return; }
     setProfile({ ...profile, avatar_url: avatarUrl }); setAvatarFile(null); await onSaved();
   };
   return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="quiet-button" onClick={onSignOut}>Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
