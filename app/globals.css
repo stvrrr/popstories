@@ -64,6 +64,10 @@
 .profile-preview span { color:var(--muted); font-size:10px; }
 .avatar-large { width:58px; height:58px; font-size:15px; }
 .profile-error { margin:0; color:var(--terra); font-size:10px; line-height:1.5; }
+.description-field { display:grid; position:relative; gap:7px; margin:0 0 22px; color:var(--muted); font-size:10px; font-weight:600; }
+.description-field textarea { min-height:70px; padding:10px 11px; resize:vertical; border:1px solid var(--line); border-radius:6px; outline:0; background:var(--paper); color:var(--ink); font-size:12px; line-height:1.5; }
+.description-field textarea:focus { border-color:var(--sage); }
+.description-field > span { color:var(--faint); font-size:9px; font-weight:400; text-align:right; }
 @media (max-width:680px) { .shelf-row { display:block; } .shelf-row-actions { margin-top:16px; } .story-card-main { padding:19px 18px 16px; } }
 .empty-dashboard { max-width:540px; padding:70px 0; color:var(--muted); }
 .empty-dashboard > svg { margin-bottom:20px; color:var(--sage); }

@@ -67,6 +67,7 @@ export default function HomePage() {
   const [pages, setPages] = useState([""]);
   const [activePage, setActivePage] = useState(0);
   const [storyTitle, setStoryTitle] = useState("");
+  const [storyDescription, setStoryDescription] = useState("");
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
@@ -208,14 +209,18 @@ export default function HomePage() {
       notify("Add a title and some story text first");
       return;
     }
-    const excerpt = pages.join("\n\n").trim().slice(0, 180);
+    if (!storyDescription.trim()) {
+      notify("Add a short description for your story");
+      return;
+    }
+    const excerpt = storyDescription.trim().slice(0, 240);
     if (editingStoryId) {
       const { error } = await supabase.from("stories").update({ title: storyTitle.trim(), excerpt, updated_at: new Date().toISOString() }).eq("id", editingStoryId).eq("author_id", user.id);
       if (error) { notify(error.message); return; }
       await supabase.from("story_pages").delete().eq("story_id", editingStoryId);
       const { error: pageError } = await supabase.from("story_pages").insert(pages.map((content, index) => ({ story_id: editingStoryId, page_number: index + 1, content })));
       if (pageError) { notify(pageError.message); return; }
-      setEditingStoryId(null); setStoryTitle(""); setPages([""]); setActivePage(0); await loadStories(); setView("Shelf"); notify("Your story was updated"); return;
+      setEditingStoryId(null); setStoryTitle(""); setStoryDescription(""); setPages([""]); setActivePage(0); await loadStories(); setView("Shelf"); notify("Your story was updated"); return;
     }
     const { data: story, error } = await supabase
       .from("stories")
@@ -249,6 +254,7 @@ export default function HomePage() {
       return;
     }
     setStoryTitle("");
+    setStoryDescription("");
     setPages([""]);
     setActivePage(0);
     await loadStories();
@@ -416,12 +422,13 @@ export default function HomePage() {
         {view === "Shelf" && (
           <ShelfView user={user} onWrite={() => { setEditingStoryId(null); setView("Write"); }} onEdit={async (storyId) => {
             const [{ data: story }, { data: pageRows }] = await Promise.all([
-              supabase.from("stories").select("id,title").eq("id", storyId).single(),
+              supabase.from("stories").select("id,title,excerpt").eq("id", storyId).single(),
               supabase.from("story_pages").select("page_number,content").eq("story_id", storyId).order("page_number"),
             ]);
             if (!story) { notify("That story could not be found"); return; }
             setEditingStoryId(story.id);
             setStoryTitle(story.title);
+            setStoryDescription(story.excerpt ?? "");
             setPages(pageRows?.map((page) => page.content) ?? [""]);
             setActivePage(0);
             setView("Write");
@@ -438,6 +445,8 @@ export default function HomePage() {
             user={user}
             storyTitle={storyTitle}
             setStoryTitle={setStoryTitle}
+            storyDescription={storyDescription}
+            setStoryDescription={setStoryDescription}
             pages={pages}
             activePage={activePage}
             setActivePage={setActivePage}
@@ -1215,6 +1224,8 @@ function Writer({
   user,
   storyTitle,
   setStoryTitle,
+  storyDescription,
+  setStoryDescription,
   pages,
   activePage,
   setActivePage,
@@ -1228,6 +1239,8 @@ function Writer({
   user: User | null;
   storyTitle: string;
   setStoryTitle: (value: string) => void;
+  storyDescription: string;
+  setStoryDescription: (value: string) => void;
   pages: string[];
   activePage: number;
   setActivePage: (page: number) => void;
@@ -1282,6 +1295,16 @@ function Writer({
             onChange={(event) => setStoryTitle(event.target.value)}
             placeholder="Give your story a title..."
           />
+          <label className="description-field">
+            Story description
+            <textarea
+              value={storyDescription}
+              onChange={(event) => setStoryDescription(event.target.value)}
+              maxLength={240}
+              placeholder="Give readers a short reason to open this story..."
+            />
+            <span>{storyDescription.length} / 240</span>
+          </label>
           <div className="writing-tools">
             <button aria-label="Bold" onClick={() => wrapSelection("**", "**")}>
               <span className="tool-bold">B</span>
