@@ -1,7 +1,9 @@
 "use client";
 
 import { BarChart3, Bell, BookOpen, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Heart, Home, Leaf, Menu, MoreHorizontal, Moon, PenLine, Plus, Search, Send, Share2, Sparkles, Sun, Users, X } from "lucide-react";
-import { useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import { useEffect, useState } from "react";
+import { createClient } from "../lib/supabase/client";
 
 type Story = { id: number; title: string; excerpt: string; author: string; handle: string; initials: string; category: string; readTime: string; date: string; accent: string; likes: number };
 const stories: Story[] = [
@@ -12,6 +14,7 @@ const stories: Story[] = [
 const PAGE_LIMIT = 620;
 const navItems = [{ label: "Discover", icon: Home }, { label: "Following", icon: Users }, { label: "Dashboard", icon: BarChart3 }];
 const chartData = [34, 48, 42, 67, 55, 72, 64, 84, 76, 92, 87, 100];
+const supabase = createClient();
 
 export default function HomePage() {
   const [view, setView] = useState("Discover");
@@ -25,7 +28,30 @@ export default function HomePage() {
   const [pages, setPages] = useState([""]);
   const [activePage, setActivePage] = useState(0);
   const [storyTitle, setStoryTitle] = useState("");
+  const [user, setUser] = useState<User | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
+    return () => listener.subscription.unsubscribe();
+  }, [supabase]);
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2400); };
+  const handleAuth = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setAuthLoading(true); setAuthError("");
+    const result = authMode === "login"
+      ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
+      : await supabase.auth.signUp({ email: authEmail, password: authPassword });
+    setAuthLoading(false);
+    if (result.error) { setAuthError(result.error.message); return; }
+    setAuthOpen(false); setAuthEmail(""); setAuthPassword("");
+    notify(authMode === "login" ? "Welcome back" : "Check your email to confirm your account");
+  };
+  const handleSignOut = async () => { await supabase.auth.signOut(); notify("You have been signed out"); };
   const toggleLike = (story: Story) => setLiked((current) => current.includes(story.id) ? current.filter((id) => id !== story.id) : [...current, story.id]);
   const toggleSave = (story: Story) => { setSaved((current) => current.includes(story.id) ? current.filter((id) => id !== story.id) : [...current, story.id]); notify(saved.includes(story.id) ? "Removed from your shelf" : "Saved to your shelf"); };
   const updatePage = (value: string) => { const next = [...pages]; next[activePage] = value; setPages(next); };
@@ -35,7 +61,7 @@ export default function HomePage() {
   return <div className={`app-shell ${theme === "dark" ? "dark-mode" : ""}`}>
     <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
       <div className="brand-lockup"><div className="brand-mark"><Coffee size={19} /></div><span>Flip Stories</span></div>
-      <div className="profile-mini"><div className="avatar avatar-plum">NS</div><div><strong>Nora Sato</strong><span>@norawrites</span></div><ChevronDown size={15} /></div>
+      <button className="profile-mini" onClick={() => user ? handleSignOut() : setAuthOpen(true)}><div className="avatar avatar-plum">{user ? (user.email?.[0] ?? "U").toUpperCase() : "NS"}</div><div><strong>{user ? user.email : "Sign in to Flip Stories"}</strong><span>{user ? "Sign out" : "Read, write, and follow"}</span></div><ChevronDown size={15} /></button>
       <nav className="main-nav" aria-label="Main navigation">{navItems.map(({ label, icon: Icon }) => <button className={`nav-item ${view === label ? "active" : ""}`} key={label} onClick={() => { setView(label); setMenuOpen(false); }}><Icon size={18} /><span>{label}</span>{label === "Following" && <span className="nav-count">4</span>}</button>)}</nav>
       <div className="nav-section-label">Your space</div><nav className="main-nav"><button className={`nav-item ${view === "Write" ? "active" : ""}`} onClick={() => { setView("Write"); setMenuOpen(false); }}><PenLine size={18} /><span>Write a story</span></button><button className="nav-item" onClick={() => notify("Your shelf is coming with you")}><Bookmark size={18} /><span>My shelf</span><span className="nav-count">2</span></button></nav>
       <div className="sidebar-bottom"><div className="sidebar-note"><Sparkles size={17} /><p><strong>Small stories matter.</strong><br />Make room for yours.</p></div><button className="theme-toggle" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>{theme === "light" ? <Moon size={16} /> : <Sun size={16} />}<span>{theme === "light" ? "Night mode" : "Day mode"}</span><span className="toggle-track"><span /></span></button></div>
@@ -47,6 +73,7 @@ export default function HomePage() {
       {view === "Write" && <Writer setView={setView} storyTitle={storyTitle} setStoryTitle={setStoryTitle} pages={pages} activePage={activePage} setActivePage={setActivePage} updatePage={updatePage} addPage={addPage} notify={notify} />}
     </main>
     {readingStory && <ReaderModal story={readingStory} liked={liked.includes(readingStory.id)} saved={saved.includes(readingStory.id)} onClose={() => setReadingStory(null)} onLike={() => toggleLike(readingStory)} onSave={() => toggleSave(readingStory)} onShare={() => notify("Story link copied to your clipboard")} />}
+    {authOpen && <AuthModal mode={authMode} setMode={setAuthMode} email={authEmail} setEmail={setAuthEmail} password={authPassword} setPassword={setAuthPassword} error={authError} loading={authLoading} onSubmit={handleAuth} onClose={() => setAuthOpen(false)} />}
     {toast && <div className="toast"><Check size={16} /> {toast}</div>}
   </div>;
 }
@@ -74,3 +101,7 @@ function Writer({ setView, storyTitle, setStoryTitle, pages, activePage, setActi
 }
 
 function ReaderModal({ story, liked, saved, onClose, onLike, onSave, onShare }: { story: Story; liked: boolean; saved: boolean; onClose: () => void; onLike: () => void; onSave: () => void; onShare: () => void }) { return <div className="modal-backdrop" onClick={onClose}><article className="reader-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={onClose} aria-label="Close story"><X size={19} /></button><div className={`reader-art reader-art-${story.accent}`}><div className="reader-art-circle" /><Coffee size={37} /></div><div className="reader-content"><span className="story-category">{story.category}</span><h2>{story.title}</h2><div className="reader-author"><span className={`avatar avatar-${story.accent}`}>{story.initials}</span><span><strong>{story.author}</strong><small>{story.readTime} · {story.date}</small></span><button onClick={onSave} className="reader-save">{saved ? "Saved" : "Save story"} <Bookmark size={15} fill={saved ? "currentColor" : "none"} /></button></div><div className="reader-body"><p>{story.excerpt}</p><p>There are days when a story begins before we know to call it one. It lives in the small details: the warmth of a cup held between both hands, the familiar face across the room, the pause before a door opens.</p><p>Maybe that is why we keep coming back to the same places. Not because they never change, but because they let us notice when we do.</p></div><div className="reader-actions"><button onClick={onLike} className={liked ? "liked" : ""}><Heart size={17} fill={liked ? "currentColor" : "none"} /> {liked ? "Liked" : "Like story"}</button><button onClick={onShare}><Share2 size={17} /> Share</button></div></div></article></div>; }
+
+function AuthModal({ mode, setMode, email, setEmail, password, setPassword, error, loading, onSubmit, onClose }: { mode: "login" | "signup"; setMode: (mode: "login" | "signup") => void; email: string; setEmail: (value: string) => void; password: string; setPassword: (value: string) => void; error: string; loading: boolean; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void; onClose: () => void }) {
+  return <div className="modal-backdrop" onClick={onClose}><section className="auth-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={onClose} aria-label="Close account form"><X size={19} /></button><div className="auth-mark"><Coffee size={22} /></div><p className="eyebrow">Flip Stories</p><h2>{mode === "login" ? "Welcome back." : "Make room for your story."}</h2><p className="auth-intro">{mode === "login" ? "Your little corner of the reading room is waiting." : "Create an account to write, save, and follow."}</p><form onSubmit={onSubmit} className="auth-form"><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="you@example.com" /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} placeholder="At least 6 characters" /></label>{error && <p className="auth-error">{error}</p>}<button className="publish-button auth-submit" disabled={loading}>{loading ? "Please wait..." : mode === "login" ? "Log in" : "Create account"}</button></form><p className="auth-switch">{mode === "login" ? "New to Flip Stories?" : "Already have an account?"} <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); }}> {mode === "login" ? "Create an account" : "Log in"}</button></p></section></div>;
+}
