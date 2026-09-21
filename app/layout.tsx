@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Popstories",
-  description: "A new story starts here."
+  title: "Flip Stories | A quiet place for good stories",
+  description: "Read, write, and share the stories that stay with you."
 };
 
 export default function RootLayout({
