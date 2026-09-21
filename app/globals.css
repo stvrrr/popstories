@@ -23,6 +23,29 @@
 
 .sidebar-backdrop { display:none; }
 .add-page-button { display:flex !important; width:auto !important; align-items:center; gap:5px; padding:0 8px; border:1px solid var(--line); background:transparent; color:var(--sage); font-size:10px; }
+.story-card { display:block; min-height:0; cursor:pointer; }
+.story-card:focus-visible { outline:2px solid var(--sage); outline-offset:3px; }
+.story-art { display:none; }
+.story-card-main { padding:22px 25px 18px; }
+.story-card h3 { margin-top:10px; font-size:21px; }
+.story-card-bottom { margin-top:20px; }
+.shelf-wrap { max-width:1050px; }
+.shelf-list { display:grid; gap:12px; }
+.shelf-row { display:flex; align-items:center; justify-content:space-between; gap:22px; padding:20px 22px; border:1px solid var(--line); border-radius:10px; background:var(--raised); }
+.shelf-row-copy { min-width:0; }
+.shelf-row h2 { margin:9px 0 5px; font-family:"Libre Baskerville",serif; font-size:19px; font-weight:400; }
+.shelf-row p { max-width:650px; margin:0 0 9px; overflow:hidden; color:var(--muted); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.shelf-row small { color:var(--faint); font-size:9px; }
+.shelf-row-actions { display:flex; flex:0 0 auto; gap:8px; }
+.status-pill { padding:4px 7px; border-radius:5px; font-size:9px; font-weight:700; text-transform:capitalize; }
+.status-published { background:var(--sage-soft); color:var(--sage); }
+.status-draft { background:#f3e8de; color:var(--ochre); }
+.delete-button { display:flex; align-items:center; gap:6px; padding:9px 12px; border:1px solid #e2c5ba; border-radius:7px; background:transparent; color:var(--terra); font-size:11px; }
+.shelf-empty { padding:55px 0; color:var(--muted); }
+.shelf-empty svg { color:var(--sage); }
+.shelf-empty h2 { margin:16px 0 8px; font-family:"Libre Baskerville",serif; font-size:24px; font-weight:400; color:var(--ink); }
+.shelf-empty p { margin:0 0 16px; font-size:12px; }
+@media (max-width:680px) { .shelf-row { display:block; } .shelf-row-actions { margin-top:16px; } .story-card-main { padding:19px 18px 16px; } }
 .empty-dashboard { max-width:540px; padding:70px 0; color:var(--muted); }
 .empty-dashboard > svg { margin-bottom:20px; color:var(--sage); }
 .empty-dashboard h1 { margin:0; font-family:"Libre Baskerville",serif; font-size:clamp(2.3rem,4vw,3.6rem); font-weight:400; line-height:1.1; }
