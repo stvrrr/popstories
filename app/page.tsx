@@ -53,6 +53,7 @@ const navItems = [
 ];
 const chartData: number[] = [];
 const supabase = createClient();
+const ADMIN_USER_ID = "b3cf6d3d-3f8c-43f1-92b6-b07b115accde";
 
 export default function HomePage() {
   const [view, setView] = useState("Discover");
@@ -70,6 +71,7 @@ export default function HomePage() {
   const [storyDescription, setStoryDescription] = useState("");
   const [storyVisibility, setStoryVisibility] = useState<"public" | "followers" | "private">("public");
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
+  const [publicProfileUsername, setPublicProfileUsername] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
@@ -347,6 +349,7 @@ export default function HomePage() {
             <Users size={18} />
             <span>Profile settings</span>
           </button>
+          {user?.id === ADMIN_USER_ID && <button className={`nav-item ${view === "Admin" ? "active" : ""}`} onClick={() => { setView("Admin"); setMenuOpen(false); }}><BarChart3 size={18} /><span>Admin panel</span></button>}
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-note">
@@ -418,6 +421,7 @@ export default function HomePage() {
             onLike={toggleLike}
             onSave={toggleSave}
             onFollow={toggleFollow}
+            onAuthor={(username) => { setPublicProfileUsername(username); setView("PublicProfile"); }}
           />
         )}
         {view === "Following" && (
@@ -433,12 +437,15 @@ export default function HomePage() {
             onSave={toggleSave}
             onFollow={toggleFollow}
             onRead={setReadingStory}
+            onAuthor={(username) => { setPublicProfileUsername(username); setView("PublicProfile"); }}
           />
         )}
         {view === "Dashboard" && (
           <Dashboard onWrite={() => setView("Write")} user={user} />
         )}
         {view === "Profile" && <ProfileView user={user} onSignOut={handleSignOut} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
+        {view === "PublicProfile" && publicProfileUsername && <PublicProfile username={publicProfileUsername} onBack={() => setView("Discover")} onRead={setReadingStory} />}
+        {view === "Admin" && user?.id === ADMIN_USER_ID && <AdminPanel />}
         {view === "Shelf" && (
           <ShelfView user={user} onWrite={() => { setEditingStoryId(null); setView("Write"); }} onEdit={async (storyId) => {
             const [{ data: story }, { data: pageRows }] = await Promise.all([
@@ -527,6 +534,7 @@ function Discover({
   onLike,
   onSave,
   onFollow,
+  onAuthor,
 }: {
   setView: (view: string) => void;
   setReadingStory: (story: Story) => void;
@@ -537,6 +545,7 @@ function Discover({
   onLike: (story: Story) => void;
   onSave: (story: Story) => void;
   onFollow: (story: Story) => void;
+  onAuthor: (username: string) => void;
 }) {
   if (!stories.length) {
     return (
@@ -590,6 +599,7 @@ function Discover({
             onSave={() => onSave(story)}
             onFollow={() => onFollow(story)}
             onRead={() => setReadingStory(story)}
+            onAuthor={() => onAuthor(story.handle)}
           />
         ))}
       </div>
@@ -607,6 +617,7 @@ function FollowingView({
   onSave,
   onFollow,
   onRead,
+  onAuthor,
 }: {
   setView: (view: string) => void;
   stories: Story[];
@@ -617,6 +628,7 @@ function FollowingView({
   onSave: (story: Story) => void;
   onFollow: (story: Story) => void;
   onRead: (story: Story) => void;
+  onAuthor: (username: string) => void;
 }) {
   if (!stories.length) {
     return (
@@ -669,6 +681,7 @@ function FollowingView({
             onSave={() => onSave(story)}
             onFollow={() => onFollow(story)}
             onRead={() => onRead(story)}
+            onAuthor={() => onAuthor(story.handle)}
           />
         ))}
       </div>
@@ -685,6 +698,7 @@ function StoryCard({
   onSave,
   onFollow,
   onRead,
+  onAuthor,
 }: {
   story: Story;
   liked: boolean;
@@ -694,6 +708,7 @@ function StoryCard({
   onSave: () => void;
   onFollow: () => void;
   onRead: () => void;
+  onAuthor: () => void;
 }) {
   return (
     <article className="story-card" onClick={onRead} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onRead(); }} role="button" tabIndex={0}>
@@ -710,7 +725,7 @@ function StoryCard({
         <h3>{story.title}</h3>
         <p>{story.excerpt}</p>
         <div className="story-card-bottom">
-          <button className="author-chip" onClick={(event) => { event.stopPropagation(); onFollow(); }}>
+          <button className="author-chip" onClick={(event) => { event.stopPropagation(); onAuthor(); }}>
             {story.avatarUrl ? <img className="avatar avatar-image" src={story.avatarUrl} alt="" /> : <span className={`avatar avatar-${story.accent}`}>{story.initials}</span>}
             <span>
               <strong>{story.author}</strong>
@@ -773,6 +788,32 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
     setProfile({ ...profile, avatar_url: avatarUrl }); setAvatarFile(null); await onSaved();
   };
   return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="quiet-button" onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}>Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
+}
+
+function PublicProfile({ username, onBack, onRead }: { username: string; onBack: () => void; onRead: (story: Story) => void }) {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [stories, setStories] = useState<Story[]>([]);
+  useEffect(() => {
+    const load = async () => {
+      const { data: profileRow } = await supabase.from("profiles").select("id,username,display_name,bio,avatar_url").eq("username", username).maybeSingle();
+      if (!profileRow) return;
+      setProfile(profileRow);
+      const { data } = await supabase.from("stories").select("id,title,excerpt,category,created_at,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)").eq("author_id", profileRow.id).eq("status", "published").eq("visibility", "public").order("published_at", { ascending: false });
+      setStories((data ?? []).map((story: any, index) => ({ id: story.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
+    };
+    void load();
+  }, [username]);
+  if (!profile) return <section className="content-wrap empty-feed"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back</button><h1>Profile not found.</h1></section>;
+  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div></div><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={false} onLike={() => {}} onSave={() => {}} onFollow={() => {}} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
+}
+
+function AdminPanel() {
+  const [data, setData] = useState<{ users: Array<{ id: string; username: string; display_name: string }>; stories: Array<{ id: string; title: string; status: string; visibility: string; author_id: string }> } | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => { void load(); }, []);
+  const load = async () => { const response = await fetch("/api/admin"); const body = await response.json(); if (!response.ok) setError(body.error ?? "Could not load admin data"); else setData(body); };
+  const remove = async (type: "story" | "profile", id: string, label: string) => { if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return; const response = await fetch("/api/admin", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, id }) }); const body = await response.json(); if (!response.ok) setError(body.error ?? "Delete failed"); else await load(); };
+  return <section className="content-wrap admin-wrap"><p className="eyebrow"><BarChart3 size={14} /> Private admin</p><h1>Manage the <em>reading room.</em></h1><p className="subtitle">Users and all stories, including private ones, are visible only to the approved admin account.</p>{error ? <p className="profile-error">{error}. Add SUPABASE_SERVICE_ROLE_KEY to Vercel if needed.</p> : !data ? <p className="subtitle">Loading admin data...</p> : <div className="admin-grid"><div className="analytics-card"><span className="section-kicker">People</span><h2>{data.users.length} users</h2>{data.users.map((person) => <div className="admin-row" key={person.id}><span className="avatar avatar-plum">{person.display_name.slice(0, 2).toUpperCase()}</span><span><strong>{person.display_name}</strong><small>@{person.username}</small></span><button className="delete-button" onClick={() => remove("profile", person.id, person.display_name)}><X size={14} /></button></div>)}</div><div className="analytics-card"><span className="section-kicker">Library</span><h2>{data.stories.length} stories</h2>{data.stories.map((story) => <div className="admin-row" key={story.id}><span><strong>{story.title}</strong><small>{story.visibility} · {story.status}</small></span><button className="delete-button" onClick={() => remove("story", story.id, story.title)}><X size={14} /></button></div>)}</div></div>}</section>;
 }
 
 function ShelfView({ user, onWrite, onEdit, onDelete }: { user: User | null; onWrite: () => void; onEdit: (storyId: string) => void; onDelete: (storyId: string) => void }) {

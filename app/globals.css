@@ -64,6 +64,19 @@
 .profile-preview span { color:var(--muted); font-size:10px; }
 .avatar-large { width:58px; height:58px; font-size:15px; }
 .profile-error { margin:0; color:var(--terra); font-size:10px; line-height:1.5; }
+.public-profile-wrap,.admin-wrap { max-width:1050px; }
+.public-profile-header { display:flex; align-items:center; gap:18px; margin:35px 0 50px; }
+.public-avatar { width:76px; height:76px; border-radius:50%; object-fit:cover; }
+.public-profile-header h1 { margin:0; font-family:"Libre Baskerville",serif; font-size:34px; font-weight:400; }
+.public-profile-header p { margin:5px 0; color:var(--muted); font-size:11px; }
+.public-profile-header span { color:var(--muted); font-size:12px; }
+.admin-wrap h1 { margin:0; font-family:"Libre Baskerville",serif; font-size:clamp(2.4rem,4vw,4rem); font-weight:400; }
+.admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:40px; }
+.admin-grid h2 { margin:8px 0 22px; font-family:"Libre Baskerville",serif; font-size:23px; font-weight:400; }
+.admin-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-top:1px solid var(--line); }
+.admin-row > span:nth-child(2),.admin-row > span:first-child:not(.avatar) { display:grid; gap:3px; flex:1; }
+.admin-row strong { font-size:11px; font-weight:600; }
+.admin-row small { color:var(--muted); font-size:9px; }
 .description-field { display:grid; position:relative; gap:7px; margin:0 0 22px; color:var(--muted); font-size:10px; font-weight:600; }
 .description-field textarea { min-height:70px; padding:10px 11px; resize:vertical; border:1px solid var(--line); border-radius:6px; outline:0; background:var(--paper); color:var(--ink); font-size:12px; line-height:1.5; }
 .description-field textarea:focus { border-color:var(--sage); }
