@@ -27,7 +27,7 @@ import {
   X,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 
 type Story = {
@@ -76,7 +76,7 @@ export default function HomePage() {
     const { data } = await supabase
       .from("stories")
       .select(
-        "id,title,excerpt,category,created_at,author_id,profiles(username,display_name),likes(count)",
+        "id,title,excerpt,category,created_at,author_id,profiles!stories_author_id_fkey(username,display_name),likes(count)",
       )
       .eq("status", "published")
       .eq("visibility", "public")
@@ -1180,6 +1180,19 @@ function Writer({
   notify: (message: string) => void;
   onPublish: () => Promise<void>;
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const wrapSelection = (before: string, after: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = pages[activePage];
+    updatePage(`${value.slice(0, start)}${before}${value.slice(start, end)}${after}${value.slice(end)}`);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + before.length, end + before.length);
+    });
+  };
   return (
     <section className="content-wrap writer-wrap">
       <div className="writer-heading">
@@ -1213,10 +1226,10 @@ function Writer({
             placeholder="Give your story a title..."
           />
           <div className="writing-tools">
-            <button aria-label="Bold">
+            <button aria-label="Bold" onClick={() => wrapSelection("**", "**")}>
               <span className="tool-bold">B</span>
             </button>
-            <button aria-label="Italic">
+            <button aria-label="Italic" onClick={() => wrapSelection("*", "*")}>
               <span className="tool-italic">I</span>
             </button>
             <span />
@@ -1228,6 +1241,7 @@ function Writer({
             </button>
           </div>
           <textarea
+            ref={textareaRef}
             className="story-textarea"
             value={pages[activePage]}
             onChange={(event) => updatePage(event.target.value)}
@@ -1251,6 +1265,9 @@ function Writer({
               Page {activePage + 1} of {pages.length}
             </span>
             <div className="page-controls">
+              <button className="add-page-button" onClick={addPage} aria-label="Add a new page">
+                <Plus size={16} /> <span>Add page</span>
+              </button>
               <button
                 onClick={() => setActivePage(Math.max(0, activePage - 1))}
                 disabled={activePage === 0}
