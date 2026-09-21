@@ -68,6 +68,7 @@ export default function HomePage() {
   const [activePage, setActivePage] = useState(0);
   const [storyTitle, setStoryTitle] = useState("");
   const [storyDescription, setStoryDescription] = useState("");
+  const [storyVisibility, setStoryVisibility] = useState<"public" | "followers" | "private">("public");
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
@@ -233,12 +234,12 @@ export default function HomePage() {
     }
     const excerpt = storyDescription.trim().slice(0, 240);
     if (editingStoryId) {
-      const { error } = await supabase.from("stories").update({ title: storyTitle.trim(), excerpt, updated_at: new Date().toISOString() }).eq("id", editingStoryId).eq("author_id", user.id);
+      const { error } = await supabase.from("stories").update({ title: storyTitle.trim(), excerpt, visibility: storyVisibility, updated_at: new Date().toISOString() }).eq("id", editingStoryId).eq("author_id", user.id);
       if (error) { notify(error.message); return; }
       await supabase.from("story_pages").delete().eq("story_id", editingStoryId);
       const { error: pageError } = await supabase.from("story_pages").insert(pages.map((content, index) => ({ story_id: editingStoryId, page_number: index + 1, content })));
       if (pageError) { notify(pageError.message); return; }
-      setEditingStoryId(null); setStoryTitle(""); setStoryDescription(""); setPages([""]); setActivePage(0); await loadStories(); setView("Shelf"); notify("Your story was updated"); return;
+      setEditingStoryId(null); setStoryTitle(""); setStoryDescription(""); setStoryVisibility("public"); setPages([""]); setActivePage(0); await loadStories(); setView("Shelf"); notify("Your story was updated"); return;
     }
     const { data: story, error } = await supabase
       .from("stories")
@@ -247,7 +248,7 @@ export default function HomePage() {
         title: storyTitle.trim(),
         excerpt,
         category: "Personal essays",
-        visibility: "public",
+        visibility: storyVisibility,
         status: "published",
         published_at: new Date().toISOString(),
       })
@@ -273,6 +274,7 @@ export default function HomePage() {
     }
     setStoryTitle("");
     setStoryDescription("");
+    setStoryVisibility("public");
     setPages([""]);
     setActivePage(0);
     await loadStories();
@@ -440,13 +442,14 @@ export default function HomePage() {
         {view === "Shelf" && (
           <ShelfView user={user} onWrite={() => { setEditingStoryId(null); setView("Write"); }} onEdit={async (storyId) => {
             const [{ data: story }, { data: pageRows }] = await Promise.all([
-              supabase.from("stories").select("id,title,excerpt").eq("id", storyId).single(),
+              supabase.from("stories").select("id,title,excerpt,visibility").eq("id", storyId).single(),
               supabase.from("story_pages").select("page_number,content").eq("story_id", storyId).order("page_number"),
             ]);
             if (!story) { notify("That story could not be found"); return; }
             setEditingStoryId(story.id);
             setStoryTitle(story.title);
             setStoryDescription(story.excerpt ?? "");
+            setStoryVisibility(story.visibility ?? "public");
             setPages(pageRows?.map((page) => page.content) ?? [""]);
             setActivePage(0);
             setView("Write");
@@ -465,6 +468,8 @@ export default function HomePage() {
             setStoryTitle={setStoryTitle}
             storyDescription={storyDescription}
             setStoryDescription={setStoryDescription}
+            storyVisibility={storyVisibility}
+            setStoryVisibility={setStoryVisibility}
             pages={pages}
             activePage={activePage}
             setActivePage={setActivePage}
@@ -1246,6 +1251,8 @@ function Writer({
   setStoryTitle,
   storyDescription,
   setStoryDescription,
+  storyVisibility,
+  setStoryVisibility,
   pages,
   activePage,
   setActivePage,
@@ -1261,6 +1268,8 @@ function Writer({
   setStoryTitle: (value: string) => void;
   storyDescription: string;
   setStoryDescription: (value: string) => void;
+  storyVisibility: "public" | "followers" | "private";
+  setStoryVisibility: (value: "public" | "followers" | "private") => void;
   pages: string[];
   activePage: number;
   setActivePage: (page: number) => void;
@@ -1396,10 +1405,10 @@ function Writer({
           </label>
           <label>
             Who can read this?
-            <select defaultValue="Everyone">
-              <option>Everyone</option>
-              <option>Followers only</option>
-              <option>Only me</option>
+            <select value={storyVisibility} onChange={(event) => setStoryVisibility(event.target.value as "public" | "followers" | "private") }>
+              <option value="public">Everyone</option>
+              <option value="followers">Followers only</option>
+              <option value="private">Only me</option>
             </select>
           </label>
           <div className="story-tip">
