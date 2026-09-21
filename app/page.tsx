@@ -45,6 +45,10 @@ type Story = {
   avatarUrl: string;
 };
 type Profile = { username: string; display_name: string; bio: string; avatar_url: string };
+function getReadTime(text: string) {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.ceil(words / 200))} min read`;
+}
 const PAGE_LIMIT = 620;
 const navItems = [
   { label: "Discover", icon: Home },
@@ -97,6 +101,10 @@ export default function HomePage() {
       profiles: { username: string; display_name: string; avatar_url: string | null } | { username: string; display_name: string; avatar_url: string | null }[] | null;
       likes: Array<{ count: number }>;
     }>;
+    const pageContent = await Promise.all(loaded.map(async (story) => {
+      const { data: pages } = await supabase.from("story_pages").select("content").eq("story_id", story.id);
+      return pages?.map((page) => page.content).join(" ") ?? story.excerpt ?? "";
+    }));
     setStories(
       loaded.map((story, index) => {
         const profile = Array.isArray(story.profiles) ? story.profiles[0] : story.profiles;
@@ -110,7 +118,7 @@ export default function HomePage() {
           .slice(0, 2)
           .toUpperCase(),
         category: story.category ?? "Personal essays",
-        readTime: "5 min read",
+        readTime: getReadTime(pageContent[index]),
         date: new Date(story.created_at).toLocaleDateString(),
         accent: ["sage", "terracotta", "mustard"][index % 3],
         likes: story.likes?.[0]?.count ?? 0,
@@ -787,7 +795,7 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
     if (error) { setMessage(error.code === "23505" ? "That username is already taken." : error.code === "PGRST116" ? "Your profile record is missing. Run the profile setup SQL in Supabase first." : error.message); return; }
     setProfile({ ...profile, avatar_url: avatarUrl }); setAvatarFile(null); await onSaved();
   };
-  return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="quiet-button" onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}>Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
+  return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="sign-out-button" onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}><X size={15} /> Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
 }
 
 function PublicProfile({ username, onBack, onRead }: { username: string; onBack: () => void; onRead: (story: Story) => void }) {
