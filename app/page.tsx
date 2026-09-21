@@ -43,6 +43,7 @@ type Story = {
   accent: string;
   likes: number;
 };
+type Profile = { username: string; display_name: string; bio: string; avatar_url: string };
 const PAGE_LIMIT = 620;
 const navItems = [
   { label: "Discover", icon: Home },
@@ -88,17 +89,19 @@ export default function HomePage() {
       excerpt: string | null;
       category: string | null;
       created_at: string;
-      profiles: { username: string; display_name: string }[];
+      profiles: { username: string; display_name: string } | { username: string; display_name: string }[] | null;
       likes: Array<{ count: number }>;
     }>;
     setStories(
-      loaded.map((story, index) => ({
+      loaded.map((story, index) => {
+        const profile = Array.isArray(story.profiles) ? story.profiles[0] : story.profiles;
+        return {
         id: story.id,
         title: story.title,
         excerpt: story.excerpt ?? "",
-        author: story.profiles?.[0]?.display_name ?? "Anonymous writer",
-        handle: story.profiles?.[0]?.username ?? "writer",
-        initials: (story.profiles?.[0]?.display_name ?? "AW")
+        author: profile?.display_name ?? "Anonymous writer",
+        handle: profile?.username ?? "writer",
+        initials: (profile?.display_name ?? "AW")
           .slice(0, 2)
           .toUpperCase(),
         category: story.category ?? "Personal essays",
@@ -106,7 +109,8 @@ export default function HomePage() {
         date: new Date(story.created_at).toLocaleDateString(),
         accent: ["sage", "terracotta", "mustard"][index % 3],
         likes: story.likes?.[0]?.count ?? 0,
-      })),
+        };
+      }),
     );
   };
   useEffect(() => {
@@ -266,10 +270,7 @@ export default function HomePage() {
             <X size={18} />
           </button>
         </div>
-        <button
-          className="profile-mini"
-          onClick={() => (user ? handleSignOut() : setAuthOpen(true))}
-        >
+        <button className="profile-mini" onClick={() => user ? setView("Profile") : setAuthOpen(true)}>
           <div className="avatar avatar-plum">
             {user ? (user.email?.[0] ?? "U").toUpperCase() : "NS"}
           </div>
@@ -371,7 +372,7 @@ export default function HomePage() {
               <Bell size={18} />
               <span />
             </button>
-            <div className="avatar avatar-plum avatar-small">NS</div>
+            <button className="avatar avatar-plum avatar-small" onClick={() => user ? setView("Profile") : setAuthOpen(true)} aria-label="Open profile">{user?.email?.[0]?.toUpperCase() ?? "NS"}</button>
           </div>
         </header>
         {view === "Discover" && (
@@ -405,6 +406,7 @@ export default function HomePage() {
         {view === "Dashboard" && (
           <Dashboard onWrite={() => setView("Write")} user={user} />
         )}
+        {view === "Profile" && <ProfileView user={user} onSignOut={handleSignOut} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
         {view === "Shelf" && (
           <ShelfView user={user} onWrite={() => { setEditingStoryId(null); setView("Write"); }} onEdit={async (storyId) => {
             const [{ data: story }, { data: pageRows }] = await Promise.all([
@@ -702,6 +704,37 @@ function StoryCard({
       </div>
     </article>
   );
+}
+
+function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOut: () => Promise<void>; onSaved: () => Promise<void> }) {
+  const [profile, setProfile] = useState<Profile>({ username: "", display_name: "", bio: "", avatar_url: "" });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!user) { setLoading(false); return; }
+    supabase.from("profiles").select("username,display_name,bio,avatar_url").eq("id", user.id).maybeSingle().then(({ data }) => {
+      if (data) setProfile({ username: data.username ?? "", display_name: data.display_name ?? "", bio: data.bio ?? "", avatar_url: data.avatar_url ?? "" });
+      setLoading(false);
+    });
+  }, [user]);
+  if (!user) return <section className="content-wrap empty-feed"><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Sign in to edit your <em>profile.</em></h1><p className="subtitle">Create an account to choose your name and share stories.</p></section>;
+  const saveProfile = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setSaving(true); setMessage("");
+    let avatarUrl = profile.avatar_url;
+    if (avatarFile) {
+      const path = `${user.id}/${crypto.randomUUID()}-${avatarFile.name}`;
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(path, avatarFile, { upsert: false, contentType: avatarFile.type });
+      if (uploadError) { setMessage(`Avatar upload failed: ${uploadError.message}`); setSaving(false); return; }
+      avatarUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+    }
+    const { error } = await supabase.from("profiles").update({ username: profile.username.trim().toLowerCase(), display_name: profile.display_name.trim(), bio: profile.bio.trim(), avatar_url: avatarUrl }).eq("id", user.id);
+    setSaving(false);
+    if (error) { setMessage(error.code === "23505" ? "That username is already taken." : error.message); return; }
+    setProfile({ ...profile, avatar_url: avatarUrl }); setAvatarFile(null); await onSaved();
+  };
+  return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="quiet-button" onClick={onSignOut}>Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
 }
 
 function ShelfView({ user, onWrite, onEdit, onDelete }: { user: User | null; onWrite: () => void; onEdit: (storyId: string) => void; onDelete: (storyId: string) => void }) {
