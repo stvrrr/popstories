@@ -977,6 +977,10 @@ function PublicProfile({
 
     const nextValue = !isFollowing;
     setIsFollowing(nextValue);
+    setFollowCounts((current) => ({
+      ...current,
+      followers: Math.max(0, current.followers + (nextValue ? 1 : -1)),
+    }));
     await refreshFollowingState(user.id);
     notify(nextValue ? `Following ${profile.display_name}` : `Unfollowed ${profile.display_name}`);
   };
