@@ -886,12 +886,14 @@ function FollowDirectory({ user, profileId, counts, onAuthor }: { user: User | n
     }
     const load = async () => {
       setLoading(true);
-      const column = tab === "following" ? "following_id" : "follower_id";
-      const relation = tab === "following" ? "profiles!follows_following_id_fkey" : "profiles!follows_follower_id_fkey";
+      const isFollowingTab = tab === "following";
+      const relation = isFollowingTab ? "profiles!follows_following_id_fkey" : "profiles!follows_follower_id_fkey";
+      const targetField = isFollowingTab ? "follower_id" : "following_id";
+      const relatedField = isFollowingTab ? "following_id" : "follower_id";
       const { data } = await supabase
         .from("follows")
-        .select(`${column},${relation}(id,username,display_name,avatar_url)`)
-        .eq(tab === "following" ? "follower_id" : "following_id", targetId)
+        .select(`${relatedField},${relation}(id,username,display_name,avatar_url)`)
+        .eq(targetField, targetId)
         .order("created_at", { ascending: false });
       const loaded = (data ?? []).flatMap((row: Record<string, unknown>) => {
         const profile = row.profiles;
@@ -973,6 +975,18 @@ function PublicProfile({
   const [loadingFollow, setLoadingFollow] = useState(false);
   const [followCounts, setFollowCounts] = useState({ following: 0, followers: 0 });
 
+  const loadFollowCounts = async (profileId: string) => {
+    const [{ count: followingCount }, { count: followersCount }] = await Promise.all([
+      supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", profileId),
+      supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", profileId),
+    ]);
+
+    setFollowCounts({
+      following: followingCount ?? 0,
+      followers: followersCount ?? 0,
+    });
+  };
+
   const toggleProfileFollow = async () => {
     if (!profile || !user || !profile.id) {
       setAuthMode("login");
@@ -997,6 +1011,7 @@ function PublicProfile({
       ...current,
       followers: Math.max(0, current.followers + (nextValue ? 1 : -1)),
     }));
+    await loadFollowCounts(profile.id);
     await refreshFollowingState(user.id);
     notify(nextValue ? `Following ${profile.display_name}` : `Unfollowed ${profile.display_name}`);
   };
@@ -1017,11 +1032,8 @@ function PublicProfile({
           .maybeSingle();
         setIsFollowing(Boolean(followRow));
       }
-      const [{ count: followingCount }, { count: followersCount }] = await Promise.all([
-        supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", profileRow.id),
-        supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", profileRow.id),
-      ]);
-      setFollowCounts({ following: followingCount ?? 0, followers: followersCount ?? 0 });
+
+      await loadFollowCounts(profileRow.id);
     };
     void load();
   }, [username, user]);
