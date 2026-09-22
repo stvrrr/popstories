@@ -389,7 +389,7 @@ export default function HomePage() {
             >
               <Icon size={18} />
               <span>{label}</span>
-              {label === "Following" && <span className="nav-count">4</span>}
+              {label === "Following" && <span className="nav-count">{following.length}</span>}
             </button>
           ))}
         </nav>
@@ -494,6 +494,7 @@ export default function HomePage() {
         {view === "Following" && (
           <FollowingView
             setView={setView}
+            user={user}
             stories={stories.filter((story) =>
               following.includes(story.handle),
             )}
@@ -687,6 +688,7 @@ function Discover({
 
 function FollowingView({
   setView,
+  user,
   stories,
   liked,
   saved,
@@ -698,6 +700,7 @@ function FollowingView({
   onAuthor,
 }: {
   setView: (view: string) => void;
+  user: User | null;
   stories: Story[];
   liked: string[];
   saved: string[];
@@ -714,6 +717,7 @@ function FollowingView({
         <p className="eyebrow"><Users size={14} /> Your circle</p>
         <h1>Your following list is <em>quiet.</em></h1>
         <p className="subtitle">Follow writers from Discover to see their new stories here.</p>
+        <FollowDirectory user={user} onAuthor={onAuthor} />
         <button className="text-button" onClick={() => setView("Discover")}>Browse Discover <ChevronRight size={15} /></button>
       </section>
     );
@@ -747,6 +751,7 @@ function FollowingView({
           Find more writers <ChevronRight size={15} />
         </button>
       </div>
+      <FollowDirectory user={user} onAuthor={onAuthor} />
       <div className="story-list following-list">
         {stories.map((story) => (
           <StoryCard
@@ -810,6 +815,13 @@ function StoryCard({
               <small>{following ? "Following" : `@${story.handle}`}</small>
             </span>
           </button>
+          <button
+            className={`follow-chip ${following ? "following" : ""}`}
+            onClick={(event) => { event.stopPropagation(); onFollow(); }}
+            aria-label={following ? `Unfollow ${story.author}` : `Follow ${story.author}`}
+          >
+            {following ? "Following" : "Follow"}
+          </button>
           <span className="read-time">{story.readTime}</span>
           <div className="story-actions">
             <button
@@ -834,6 +846,54 @@ function StoryCard({
         </div>
       </div>
     </article>
+  );
+}
+
+type FollowPerson = {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+};
+
+function FollowDirectory({ user, onAuthor }: { user: User | null; onAuthor: (username: string) => void }) {
+  const [tab, setTab] = useState<"following" | "followers">("following");
+  const [people, setPeople] = useState<FollowPerson[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setPeople([]);
+      return;
+    }
+    const load = async () => {
+      setLoading(true);
+      const column = tab === "following" ? "following_id" : "follower_id";
+      const relation = tab === "following" ? "profiles!follows_following_id_fkey" : "profiles!follows_follower_id_fkey";
+      const { data } = await supabase
+        .from("follows")
+        .select(`${column},${relation}(id,username,display_name,avatar_url)`)
+        .eq(tab === "following" ? "follower_id" : "following_id", user.id)
+        .order("created_at", { ascending: false });
+      const loaded = (data ?? []).flatMap((row: Record<string, unknown>) => {
+        const profile = row.profiles;
+        const person = Array.isArray(profile) ? profile[0] : profile;
+        return person && typeof person === "object" ? [person as FollowPerson] : [];
+      });
+      setPeople(loaded);
+      setLoading(false);
+    };
+    void load();
+  }, [tab, user]);
+
+  return (
+    <div className="follow-directory">
+      <div className="follow-tabs" role="tablist" aria-label="Your connections">
+        <button className={tab === "following" ? "active" : ""} onClick={() => setTab("following")} role="tab" aria-selected={tab === "following"}>Following</button>
+        <button className={tab === "followers" ? "active" : ""} onClick={() => setTab("followers")} role="tab" aria-selected={tab === "followers"}>Followers</button>
+      </div>
+      {loading ? <p className="subtitle">Loading people...</p> : people.length ? <div className="people-list">{people.map((person) => <button className="person-row" key={person.id} onClick={() => onAuthor(person.username)}><span className="person-avatar">{person.avatar_url ? <img src={person.avatar_url} alt="" /> : person.display_name.slice(0, 2).toUpperCase()}</span><span><strong>{person.display_name}</strong><small>@{person.username}</small></span><ChevronRight size={15} /></button>)}</div> : <p className="subtitle">No {tab} yet.</p>}
+    </div>
   );
 }
 
@@ -936,7 +996,7 @@ function PublicProfile({
     void load();
   }, [username, user]);
   if (!profile) return <section className="content-wrap empty-feed"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back</button><h1>Profile not found.</h1></section>;
-  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div>{user && user.id !== ADMIN_USER_ID ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={false} onLike={() => {}} onSave={() => {}} onFollow={() => {}} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
+  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={false} onLike={() => {}} onSave={() => {}} onFollow={() => {}} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
 }
 
 function AdminPanel() {

@@ -16,7 +16,7 @@ create policy "Users can view their own follows"
 on public.follows
 for select
 to authenticated
-using (auth.uid() = follower_id);
+using (auth.uid() = follower_id or auth.uid() = following_id);
 
 create policy "Users can insert follows"
 on public.follows
