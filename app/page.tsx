@@ -46,6 +46,7 @@ type Story = {
   avatarUrl: string;
 };
 type Profile = { id?: string; username: string; display_name: string; bio: string; avatar_url: string };
+type NotificationItem = { id: string; kind: "like" | "favorite"; actor: string; actorAvatar: string | null; storyTitle: string; createdAt: string };
 function getReadTime(text: string) {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return `${Math.max(1, Math.ceil(words / 200))} min read`;
@@ -100,6 +101,8 @@ export default function HomePage() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [siteImageUrl, setSiteImageUrl] = useState<string | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const refreshSavedState = async (userId: string | null) => {
     if (!userId) {
       setSaved([]);
@@ -186,6 +189,7 @@ export default function HomePage() {
       (_event: unknown, session: { user: User | null } | null) => setUser(session?.user ?? null),
     );
     void loadStories();
+    supabase.from("site_settings").select("site_image_url").eq("id", true).maybeSingle().then(({ data }: { data: { site_image_url: string | null } | null }) => setSiteImageUrl(data?.site_image_url ?? null));
     return () => listener.subscription.unsubscribe();
   }, [supabase]);
   useEffect(() => {
@@ -370,7 +374,7 @@ export default function HomePage() {
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="brand-lockup">
           <div className="brand-mark">
-            <Coffee size={19} />
+            {siteImageUrl ? <img src={siteImageUrl} alt="" /> : <Coffee size={19} />}
           </div>
           <span>Flip Stories</span>
           <button
@@ -482,12 +486,13 @@ export default function HomePage() {
             </label>
             <button
               className="icon-button notification-button"
-              onClick={() => notify("You are all caught up")}
+              onClick={() => setNotificationsOpen((open) => !open)}
               aria-label="Notifications"
             >
               <Bell size={18} />
               <span />
             </button>
+            {notificationsOpen && <NotificationPanel user={user} />}
             <button className="avatar avatar-plum avatar-small" onClick={() => user ? setView("Profile") : setAuthOpen(true)} aria-label="Open profile">{user?.email?.[0]?.toUpperCase() ?? "NS"}</button>
           </div>
         </header>
@@ -1032,6 +1037,47 @@ function PublicProfile({
   return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><FollowDirectory user={user} profileId={profile.id} counts={followCounts} onAuthor={onAuthor} /><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={isFollowing} onLike={() => {}} onSave={() => {}} onFollow={() => void toggleProfileFollow()} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
 }
 
+function NotificationPanel({ user }: { user: User | null }) {
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      if (!user) { setItems([]); setLoading(false); return; }
+      setLoading(true);
+      const { data: stories } = await supabase.from("stories").select("id,title").eq("author_id", user.id);
+      const storyRows = stories ?? [];
+      if (!storyRows.length) { if (active) { setItems([]); setLoading(false); } return; }
+      const storyIds = storyRows.map((story: { id: string }) => story.id);
+      const titleById = new Map<string, string>(storyRows.map((story: { id: string; title: string }) => [story.id, story.title] as [string, string]));
+      const [{ data: likes }, { data: favorites }] = await Promise.all([
+        supabase.from("likes").select("id,story_id,user_id,created_at").in("story_id", storyIds).order("created_at", { ascending: false }).limit(20),
+        supabase.from("favorites").select("id,story_id,user_id,created_at").in("story_id", storyIds).order("created_at", { ascending: false }).limit(20),
+      ]);
+      const rows = [
+        ...(likes ?? []).map((row: { id: string; story_id: string; user_id: string; created_at: string }) => ({ ...row, kind: "like" as const })),
+        ...(favorites ?? []).map((row: { id: string; story_id: string; user_id: string; created_at: string }) => ({ ...row, kind: "favorite" as const })),
+      ].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime()).slice(0, 20);
+      const actorIds = [...new Set(rows.map((row) => row.user_id))];
+      const { data: profiles } = actorIds.length ? await supabase.from("profiles").select("id,display_name,avatar_url").in("id", actorIds) : { data: [] };
+      const profileById = new Map<string, { id: string; display_name: string; avatar_url: string | null }>((profiles ?? []).map((profile: { id: string; display_name: string; avatar_url: string | null }) => [profile.id, profile] as [string, { id: string; display_name: string; avatar_url: string | null }]));
+      if (active) {
+        setItems(rows.flatMap((row) => {
+          const actor = profileById.get(row.user_id);
+          const storyTitle = titleById.get(row.story_id);
+          return actor && storyTitle ? [{ id: `${row.kind}-${row.id}`, kind: row.kind, actor: actor.display_name, actorAvatar: actor.avatar_url, storyTitle, createdAt: row.created_at }] : [];
+        }));
+        setLoading(false);
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [user]);
+
+  return <div className="notification-panel"><div className="notification-panel-header"><strong>Notifications</strong><span>{items.length}</span></div>{loading ? <p className="notification-empty">Loading activity...</p> : !user ? <p className="notification-empty">Sign in to see activity.</p> : !items.length ? <p className="notification-empty">No recent likes or favorites.</p> : <div className="notification-list">{items.map((item) => <div className="notification-item" key={item.id}><span className="notification-avatar">{item.actorAvatar ? <img src={item.actorAvatar} alt="" /> : item.actor.slice(0, 2).toUpperCase()}</span><p><strong>{item.actor}</strong> {item.kind === "like" ? "liked" : "favorited"} <em>{item.storyTitle}</em><small>{new Date(item.createdAt).toLocaleString()}</small></p></div>)}</div>}</div>;
+}
+
 type AdminUser = {
   id: string;
   username: string;
@@ -1041,7 +1087,31 @@ type AdminUser = {
   created_at: string;
 };
 
+function SiteSettingsPanel() {
+  const [siteImageUrl, setSiteImageUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    fetch("/api/admin").then((response) => response.json()).then((body: { settings?: { site_image_url?: string | null } }) => setSiteImageUrl(body.settings?.site_image_url ?? ""));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    const response = await fetch("/api/admin", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "settings", site_image_url: siteImageUrl }) });
+    const body = await response.json();
+    setSaving(false);
+    setMessage(response.ok ? "Saved" : body.error ?? "Could not save");
+  };
+
+  return <section className="content-wrap admin-settings-wrap"><div className="analytics-card admin-site-settings"><span className="section-kicker">Website image</span><h2>Site picture</h2><div className="admin-site-preview">{siteImageUrl ? <img src={siteImageUrl} alt="" /> : <Coffee size={22} />}</div><label className="admin-settings-label">Image URL<input value={siteImageUrl} onChange={(event) => setSiteImageUrl(event.target.value)} placeholder="https://..." /></label><div className="admin-settings-actions"><button className="primary-button" onClick={() => void save()} disabled={saving}>{saving ? "Saving..." : "Save site picture"}</button>{message && <small>{message}</small>}</div></div></section>;
+}
+
 function AdminPanel() {
+  return <><SiteSettingsPanel /><AdminUserPanel /></>;
+}
+
+function AdminUserPanel() {
   const [data, setData] = useState<{ users: AdminUser[]; stories: Array<{ id: string; title: string; status: string; visibility: string; author_id: string; created_at: string }> } | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -1083,6 +1153,7 @@ function AdminPanel() {
     await load();
     setError("");
   };
+
 
   const remove = async (type: "story" | "profile", id: string, label: string) => { if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return; const response = await fetch("/api/admin", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, id }) }); const body = await response.json(); if (!response.ok) setError(body.error ?? "Delete failed"); else await load(); };
 
