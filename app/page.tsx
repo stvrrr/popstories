@@ -32,6 +32,7 @@ import { createClient } from "../lib/supabase/client";
 
 type Story = {
   id: string;
+  authorId: string;
   title: string;
   excerpt: string;
   author: string;
@@ -120,9 +121,9 @@ export default function HomePage() {
       .eq("follower_id", userId)
       .order("created_at", { ascending: false });
 
-    const nextFollowing = (data ?? []).flatMap((row: { profiles?: FollowPerson | FollowPerson[] | null }) => {
-      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-      return profile?.username ? [profile.username] : [];
+    const nextFollowing = (data ?? []).flatMap((row: { following_id?: string; profiles?: FollowPerson | FollowPerson[] | null }) => {
+      if (!row.following_id) return [];
+      return [row.following_id];
     });
 
     const people = (data ?? []).flatMap((row: { profiles?: FollowPerson | FollowPerson[] | null }) => {
@@ -144,6 +145,7 @@ export default function HomePage() {
       .order("published_at", { ascending: false });
     const loaded = (data ?? []) as Array<{
       id: string;
+      author_id: string;
       title: string;
       excerpt: string | null;
       category: string | null;
@@ -160,6 +162,7 @@ export default function HomePage() {
         const profile = Array.isArray(story.profiles) ? story.profiles[0] : story.profiles;
         return {
         id: story.id,
+          authorId: story.author_id,
         title: story.title,
         excerpt: story.excerpt ?? "",
         author: profile?.display_name ?? "Anonymous writer",
@@ -285,7 +288,7 @@ export default function HomePage() {
       return;
     }
 
-    const isFollowing = following.includes(story.handle);
+    const isFollowing = following.includes(story.authorId);
     const result = isFollowing
       ? await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profileRow.id)
       : await supabase.from("follows").insert({ follower_id: user.id, following_id: profileRow.id });
@@ -508,7 +511,7 @@ export default function HomePage() {
             user={user}
             followingPeople={followingPeople}
             stories={stories.filter((story) =>
-              following.includes(story.handle),
+              following.includes(story.authorId),
             )}
             liked={liked}
             saved={saved}
@@ -686,7 +689,7 @@ function Discover({
             story={story}
             liked={liked.includes(story.id)}
             saved={saved.includes(story.id)}
-            following={following.includes(story.handle)}
+            following={following.includes(story.authorId)}
             onLike={() => onLike(story)}
             onSave={() => onSave(story)}
             onFollow={() => onFollow(story)}
@@ -776,7 +779,7 @@ function FollowingView({
             story={story}
             liked={liked.includes(story.id)}
             saved={saved.includes(story.id)}
-            following={following.includes(story.handle)}
+            following={following.includes(story.authorId)}
             onLike={() => onLike(story)}
             onSave={() => onSave(story)}
             onFollow={() => onFollow(story)}
@@ -1022,7 +1025,7 @@ function PublicProfile({
       if (!profileRow) return;
       setProfile(profileRow as Profile);
       const { data } = await supabase.from("stories").select("id,title,excerpt,category,created_at,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)").eq("author_id", profileRow.id).eq("status", "published").eq("visibility", "public").order("published_at", { ascending: false });
-      setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
+      setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, authorId: profileRow.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
       if (user) {
         const { data: followRow } = await supabase
           .from("follows")
