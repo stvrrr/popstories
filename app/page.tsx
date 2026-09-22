@@ -531,6 +531,7 @@ export default function HomePage() {
           <PublicProfile
             username={publicProfileUsername}
             user={user}
+            following={following}
             setAuthMode={setAuthMode}
             setAuthOpen={setAuthOpen}
             notify={notify}
@@ -954,6 +955,7 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
 function PublicProfile({
   username,
   user,
+  following,
   setAuthMode,
   setAuthOpen,
   notify,
@@ -964,6 +966,7 @@ function PublicProfile({
 }: {
   username: string;
   user: User | null;
+  following: string[];
   setAuthMode: (mode: "login" | "signup") => void;
   setAuthOpen: (open: boolean) => void;
   notify: (message: string) => void;
@@ -974,9 +977,9 @@ function PublicProfile({
 }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
-  const [isFollowing, setIsFollowing] = useState(false);
   const [loadingFollow, setLoadingFollow] = useState(false);
   const [followCounts, setFollowCounts] = useState({ following: 0, followers: 0 });
+  const isFollowing = Boolean(profile?.id && following.includes(profile.id));
 
   const loadFollowCounts = async (profileId: string) => {
     const [{ count: followingCount }, { count: followersCount }] = await Promise.all([
@@ -1009,11 +1012,6 @@ function PublicProfile({
     }
 
     const nextValue = !isFollowing;
-    setIsFollowing(nextValue);
-    setFollowCounts((current) => ({
-      ...current,
-      followers: Math.max(0, current.followers + (nextValue ? 1 : -1)),
-    }));
     await loadFollowCounts(profile.id);
     await refreshFollowingState(user.id);
     notify(nextValue ? `Following ${profile.display_name}` : `Unfollowed ${profile.display_name}`);
@@ -1026,16 +1024,6 @@ function PublicProfile({
       setProfile(profileRow as Profile);
       const { data } = await supabase.from("stories").select("id,title,excerpt,category,created_at,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)").eq("author_id", profileRow.id).eq("status", "published").eq("visibility", "public").order("published_at", { ascending: false });
       setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, authorId: profileRow.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
-      if (user) {
-        const { data: followRow } = await supabase
-          .from("follows")
-          .select("id")
-          .eq("follower_id", user.id)
-          .eq("following_id", profileRow.id)
-          .maybeSingle();
-        setIsFollowing(Boolean(followRow));
-      }
-
       await loadFollowCounts(profileRow.id);
     };
     void load();
