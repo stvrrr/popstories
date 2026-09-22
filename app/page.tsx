@@ -235,6 +235,18 @@ export default function HomePage() {
         : "Check your email to confirm your account",
     );
   };
+  const handleDiscordLogin = async () => {
+    setAuthLoading(true);
+    setAuthError("");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "discord",
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      setAuthLoading(false);
+      setAuthError(error.message);
+    }
+  };
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     notify("You have been signed out");
@@ -613,6 +625,7 @@ export default function HomePage() {
           error={authError}
           loading={authLoading}
           onSubmit={handleAuth}
+            onDiscordLogin={handleDiscordLogin}
           onClose={() => setAuthOpen(false)}
         />
       )}
@@ -2060,6 +2073,7 @@ function AuthModal({
   error,
   loading,
   onSubmit,
+  onDiscordLogin,
   onClose,
 }: {
   mode: "login" | "signup";
@@ -2071,6 +2085,7 @@ function AuthModal({
   error: string;
   loading: boolean;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onDiscordLogin: () => Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -2129,6 +2144,12 @@ function AuthModal({
                 : "Create account"}
           </button>
         </form>
+        {mode === "login" && <>
+          <div className="auth-divider"><span>or</span></div>
+          <button type="button" className="discord-button" onClick={() => void onDiscordLogin()} disabled={loading}>
+            Continue with Discord
+          </button>
+        </>}
         <p className="auth-switch">
           {mode === "login"
             ? "New to Flip Stories?"
