@@ -15,8 +15,8 @@ drop policy if exists "Users can delete follows" on public.follows;
 create policy "Users can view their own follows"
 on public.follows
 for select
-to authenticated
-using (auth.uid() = follower_id or auth.uid() = following_id);
+to authenticated, anon
+using (true);
 
 create policy "Users can insert follows"
 on public.follows

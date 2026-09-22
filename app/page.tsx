@@ -520,6 +520,7 @@ export default function HomePage() {
             setAuthOpen={setAuthOpen}
             notify={notify}
             refreshFollowingState={refreshFollowingState}
+            onAuthor={(username) => { setPublicProfileUsername(username); setView("PublicProfile"); }}
             onBack={() => setView("Discover")}
             onRead={setReadingStory}
           />
@@ -856,13 +857,14 @@ type FollowPerson = {
   avatar_url: string | null;
 };
 
-function FollowDirectory({ user, onAuthor }: { user: User | null; onAuthor: (username: string) => void }) {
+function FollowDirectory({ user, profileId, counts, onAuthor }: { user: User | null; profileId?: string; counts?: { following: number; followers: number }; onAuthor: (username: string) => void }) {
   const [tab, setTab] = useState<"following" | "followers">("following");
   const [people, setPeople] = useState<FollowPerson[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!user) {
+    const targetId = profileId ?? user?.id;
+    if (!targetId) {
       setPeople([]);
       return;
     }
@@ -873,7 +875,7 @@ function FollowDirectory({ user, onAuthor }: { user: User | null; onAuthor: (use
       const { data } = await supabase
         .from("follows")
         .select(`${column},${relation}(id,username,display_name,avatar_url)`)
-        .eq(tab === "following" ? "follower_id" : "following_id", user.id)
+        .eq(tab === "following" ? "follower_id" : "following_id", targetId)
         .order("created_at", { ascending: false });
       const loaded = (data ?? []).flatMap((row: Record<string, unknown>) => {
         const profile = row.profiles;
@@ -884,13 +886,13 @@ function FollowDirectory({ user, onAuthor }: { user: User | null; onAuthor: (use
       setLoading(false);
     };
     void load();
-  }, [tab, user]);
+  }, [tab, user, profileId]);
 
   return (
     <div className="follow-directory">
       <div className="follow-tabs" role="tablist" aria-label="Your connections">
-        <button className={tab === "following" ? "active" : ""} onClick={() => setTab("following")} role="tab" aria-selected={tab === "following"}>Following</button>
-        <button className={tab === "followers" ? "active" : ""} onClick={() => setTab("followers")} role="tab" aria-selected={tab === "followers"}>Followers</button>
+        <button className={tab === "following" ? "active" : ""} onClick={() => setTab("following")} role="tab" aria-selected={tab === "following"}>Following{counts ? ` ${counts.following}` : ""}</button>
+        <button className={tab === "followers" ? "active" : ""} onClick={() => setTab("followers")} role="tab" aria-selected={tab === "followers"}>Followers{counts ? ` ${counts.followers}` : ""}</button>
       </div>
       {loading ? <p className="subtitle">Loading people...</p> : people.length ? <div className="people-list">{people.map((person) => <button className="person-row" key={person.id} onClick={() => onAuthor(person.username)}><span className="person-avatar">{person.avatar_url ? <img src={person.avatar_url} alt="" /> : person.display_name.slice(0, 2).toUpperCase()}</span><span><strong>{person.display_name}</strong><small>@{person.username}</small></span><ChevronRight size={15} /></button>)}</div> : <p className="subtitle">No {tab} yet.</p>}
     </div>
@@ -935,6 +937,7 @@ function PublicProfile({
   setAuthOpen,
   notify,
   refreshFollowingState,
+  onAuthor,
   onBack,
   onRead,
 }: {
@@ -944,6 +947,7 @@ function PublicProfile({
   setAuthOpen: (open: boolean) => void;
   notify: (message: string) => void;
   refreshFollowingState: (userId: string | null) => Promise<void>;
+  onAuthor: (username: string) => void;
   onBack: () => void;
   onRead: (story: Story) => void;
 }) {
@@ -951,6 +955,7 @@ function PublicProfile({
   const [stories, setStories] = useState<Story[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loadingFollow, setLoadingFollow] = useState(false);
+  const [followCounts, setFollowCounts] = useState({ following: 0, followers: 0 });
 
   const toggleProfileFollow = async () => {
     if (!profile || !user || !profile.id) {
@@ -992,11 +997,16 @@ function PublicProfile({
           .maybeSingle();
         setIsFollowing(Boolean(followRow));
       }
+      const [{ count: followingCount }, { count: followersCount }] = await Promise.all([
+        supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", profileRow.id),
+        supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", profileRow.id),
+      ]);
+      setFollowCounts({ following: followingCount ?? 0, followers: followersCount ?? 0 });
     };
     void load();
   }, [username, user]);
   if (!profile) return <section className="content-wrap empty-feed"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back</button><h1>Profile not found.</h1></section>;
-  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={false} onLike={() => {}} onSave={() => {}} onFollow={() => {}} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
+  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><FollowDirectory user={user} profileId={profile.id} counts={followCounts} onAuthor={onAuthor} /><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={isFollowing} onLike={() => {}} onSave={() => {}} onFollow={() => void toggleProfileFollow()} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
 }
 
 function AdminPanel() {
