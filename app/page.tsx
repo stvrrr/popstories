@@ -44,7 +44,7 @@ type Story = {
   likes: number;
   avatarUrl: string;
 };
-type Profile = { username: string; display_name: string; bio: string; avatar_url: string };
+type Profile = { id?: string; username: string; display_name: string; bio: string; avatar_url: string };
 function getReadTime(text: string) {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return `${Math.max(1, Math.ceil(words / 200))} min read`;
@@ -98,6 +98,30 @@ export default function HomePage() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const refreshSavedState = async (userId: string | null) => {
+    if (!userId) {
+      setSaved([]);
+      return;
+    }
+    const { data } = await supabase.from("favorites").select("story_id").eq("user_id", userId);
+    setSaved((data ?? []).map((row: { story_id: string }) => row.story_id));
+  };
+  const refreshFollowingState = async (userId: string | null) => {
+    if (!userId) {
+      setFollowing([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("follows")
+      .select("following_id,profiles!follows_following_id_fkey(username)")
+      .eq("follower_id", userId);
+
+    const nextFollowing = (data ?? []).flatMap((row: { profiles?: { username?: string } | { username?: string }[] | null }) => {
+      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      return profile?.username ? [profile.username] : [];
+    });
+    setFollowing(nextFollowing);
+  };
   const loadStories = async () => {
     const { data } = await supabase
       .from("stories")
@@ -151,7 +175,7 @@ export default function HomePage() {
     return () => listener.subscription.unsubscribe();
   }, [supabase]);
   useEffect(() => {
-    if (!user) { setLiked([]); setSaved([]); return; }
+    if (!user) { setLiked([]); setSaved([]); setFollowing([]); return; }
     Promise.all([
       supabase.from("likes").select("story_id").eq("user_id", user.id),
       supabase.from("favorites").select("story_id").eq("user_id", user.id),
@@ -159,6 +183,7 @@ export default function HomePage() {
       setLiked((likesResult.data ?? []).map((row: { story_id: string }) => row.story_id));
       setSaved((favoritesResult.data ?? []).map((row: { story_id: string }) => row.story_id));
     });
+    void refreshFollowingState(user.id);
   }, [user]);
   const notify = (message: string) => {
     setToast(message);
@@ -213,7 +238,7 @@ export default function HomePage() {
       ? await supabase.from("favorites").delete().eq("user_id", user.id).eq("story_id", story.id)
       : await supabase.from("favorites").insert({ user_id: user.id, story_id: story.id });
     if (result.error) { notify(result.error.message); return; }
-    setSaved((current) => alreadySaved ? current.filter((id) => id !== story.id) : [...current, story.id]);
+    await refreshSavedState(user.id);
     notify(alreadySaved ? "Removed from your shelf" : "Saved to your shelf");
   };
   const shareStory = async (story: Story) => {
@@ -231,17 +256,36 @@ export default function HomePage() {
     setPages([...pages, ""]);
     setActivePage(pages.length);
   };
-  const toggleFollow = (story: Story) => {
-    setFollowing((current) =>
-      current.includes(story.handle)
-        ? current.filter((handle) => handle !== story.handle)
-        : [...current, story.handle],
-    );
-    notify(
-      following.includes(story.handle)
-        ? `Unfollowed ${story.author}`
-        : `Following ${story.author}`,
-    );
+  const toggleFollow = async (story: Story) => {
+    if (!user) {
+      setAuthMode("login");
+      setAuthOpen(true);
+      return;
+    }
+
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("username", story.handle)
+      .maybeSingle();
+
+    if (!profileRow) {
+      notify("That profile could not be found.");
+      return;
+    }
+
+    const isFollowing = following.includes(story.handle);
+    const result = isFollowing
+      ? await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profileRow.id)
+      : await supabase.from("follows").insert({ follower_id: user.id, following_id: profileRow.id });
+
+    if (result.error) {
+      notify(result.error.message);
+      return;
+    }
+
+    await refreshFollowingState(user.id);
+    notify(isFollowing ? `Unfollowed ${story.author}` : `Following ${story.author}`);
   };
   const publishStory = async () => {
     if (!user) {
@@ -467,7 +511,18 @@ export default function HomePage() {
           <Dashboard onWrite={() => setView("Write")} user={user} />
         )}
         {view === "Profile" && <ProfileView user={user} onSignOut={handleSignOut} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
-        {view === "PublicProfile" && publicProfileUsername && <PublicProfile username={publicProfileUsername} onBack={() => setView("Discover")} onRead={setReadingStory} />}
+        {view === "PublicProfile" && publicProfileUsername && (
+          <PublicProfile
+            username={publicProfileUsername}
+            user={user}
+            setAuthMode={setAuthMode}
+            setAuthOpen={setAuthOpen}
+            notify={notify}
+            refreshFollowingState={refreshFollowingState}
+            onBack={() => setView("Discover")}
+            onRead={setReadingStory}
+          />
+        )}
         {view === "Admin" && user?.id === ADMIN_USER_ID && <AdminPanel />}
         {view === "Shelf" && (
           <ShelfView user={user} onWrite={() => { setEditingStoryId(null); setView("Write"); }} onEdit={async (storyId) => {
@@ -813,21 +868,75 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
   return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="sign-out-button" onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}><X size={15} /> Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
 }
 
-function PublicProfile({ username, onBack, onRead }: { username: string; onBack: () => void; onRead: (story: Story) => void }) {
+function PublicProfile({
+  username,
+  user,
+  setAuthMode,
+  setAuthOpen,
+  notify,
+  refreshFollowingState,
+  onBack,
+  onRead,
+}: {
+  username: string;
+  user: User | null;
+  setAuthMode: (mode: "login" | "signup") => void;
+  setAuthOpen: (open: boolean) => void;
+  notify: (message: string) => void;
+  refreshFollowingState: (userId: string | null) => Promise<void>;
+  onBack: () => void;
+  onRead: (story: Story) => void;
+}) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [loadingFollow, setLoadingFollow] = useState(false);
+
+  const toggleProfileFollow = async () => {
+    if (!profile || !user || !profile.id) {
+      setAuthMode("login");
+      setAuthOpen(true);
+      return;
+    }
+
+    setLoadingFollow(true);
+    const result = isFollowing
+      ? await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profile.id)
+      : await supabase.from("follows").insert({ follower_id: user.id, following_id: profile.id });
+
+    setLoadingFollow(false);
+    if (result.error) {
+      notify(result.error.message);
+      return;
+    }
+
+    const nextValue = !isFollowing;
+    setIsFollowing(nextValue);
+    await refreshFollowingState(user.id);
+    notify(nextValue ? `Following ${profile.display_name}` : `Unfollowed ${profile.display_name}`);
+  };
+
   useEffect(() => {
     const load = async () => {
       const { data: profileRow } = await supabase.from("profiles").select("id,username,display_name,bio,avatar_url").eq("username", username).maybeSingle();
       if (!profileRow) return;
-      setProfile(profileRow);
+      setProfile(profileRow as Profile);
       const { data } = await supabase.from("stories").select("id,title,excerpt,category,created_at,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)").eq("author_id", profileRow.id).eq("status", "published").eq("visibility", "public").order("published_at", { ascending: false });
       setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
+      if (user) {
+        const { data: followRow } = await supabase
+          .from("follows")
+          .select("id")
+          .eq("follower_id", user.id)
+          .eq("following_id", profileRow.id)
+          .maybeSingle();
+        setIsFollowing(Boolean(followRow));
+      }
     };
     void load();
-  }, [username]);
+  }, [username, user]);
   if (!profile) return <section className="content-wrap empty-feed"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back</button><h1>Profile not found.</h1></section>;
-  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div></div><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={false} onLike={() => {}} onSave={() => {}} onFollow={() => {}} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
+  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div>{user && user.id !== ADMIN_USER_ID ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={false} onLike={() => {}} onSave={() => {}} onFollow={() => {}} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
 }
 
 function AdminPanel() {
