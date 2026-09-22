@@ -49,6 +49,21 @@ function getReadTime(text: string) {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return `${Math.max(1, Math.ceil(words / 200))} min read`;
 }
+
+function formatOrdinalDate(date = new Date()) {
+  const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
+  const month = date.toLocaleDateString("en-US", { month: "long" });
+  const day = date.getDate();
+  const suffix = day % 10 === 1 && day !== 11
+    ? "st"
+    : day % 10 === 2 && day !== 12
+      ? "nd"
+      : day % 10 === 3 && day !== 13
+        ? "rd"
+        : "th";
+  return `${weekday}, ${month} ${day}${suffix}`;
+}
+
 const PAGE_LIMIT = 620;
 const navItems = [
   { label: "Discover", icon: Home },
@@ -103,7 +118,7 @@ export default function HomePage() {
     }>;
     const pageContent = await Promise.all(loaded.map(async (story) => {
       const { data: pages } = await supabase.from("story_pages").select("content").eq("story_id", story.id);
-      return pages?.map((page) => page.content).join(" ") ?? story.excerpt ?? "";
+      return pages?.map((page: { content: string }) => page.content).join(" ") ?? story.excerpt ?? "";
     }));
     setStories(
       loaded.map((story, index) => {
@@ -128,9 +143,9 @@ export default function HomePage() {
     );
   };
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    supabase.auth.getUser().then(({ data }: { data: { user: User | null } }) => setUser(data.user));
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => setUser(session?.user ?? null),
+      (_event: unknown, session: { user: User | null } | null) => setUser(session?.user ?? null),
     );
     void loadStories();
     return () => listener.subscription.unsubscribe();
@@ -141,8 +156,8 @@ export default function HomePage() {
       supabase.from("likes").select("story_id").eq("user_id", user.id),
       supabase.from("favorites").select("story_id").eq("user_id", user.id),
     ]).then(([likesResult, favoritesResult]) => {
-      setLiked((likesResult.data ?? []).map((row) => row.story_id));
-      setSaved((favoritesResult.data ?? []).map((row) => row.story_id));
+      setLiked((likesResult.data ?? []).map((row: { story_id: string }) => row.story_id));
+      setSaved((favoritesResult.data ?? []).map((row: { story_id: string }) => row.story_id));
     });
   }, [user]);
   const notify = (message: string) => {
@@ -465,7 +480,7 @@ export default function HomePage() {
             setStoryTitle(story.title);
             setStoryDescription(story.excerpt ?? "");
             setStoryVisibility(story.visibility ?? "public");
-            setPages(pageRows?.map((page) => page.content) ?? [""]);
+            setPages(pageRows?.map((page: { content: string }) => page.content) ?? [""]);
             setActivePage(0);
             setView("Write");
           }} onDelete={async (storyId) => {
@@ -570,7 +585,7 @@ function Discover({
       <div className="welcome-row">
         <div>
           <p className="eyebrow">
-            <Leaf size={14} /> Tuesday, September 21
+            <Leaf size={14} /> {formatOrdinalDate()}
           </p>
           <h1>
             A quiet place for <em>good stories.</em>
@@ -775,7 +790,7 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
   const [message, setMessage] = useState("");
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    supabase.from("profiles").select("username,display_name,bio,avatar_url").eq("id", user.id).maybeSingle().then(({ data }) => {
+    supabase.from("profiles").select("username,display_name,bio,avatar_url").eq("id", user.id).maybeSingle().then(({ data }: { data: Profile | null }) => {
       if (data) setProfile({ username: data.username ?? "", display_name: data.display_name ?? "", bio: data.bio ?? "", avatar_url: data.avatar_url ?? "" });
       setLoading(false);
     });
@@ -807,7 +822,7 @@ function PublicProfile({ username, onBack, onRead }: { username: string; onBack:
       if (!profileRow) return;
       setProfile(profileRow);
       const { data } = await supabase.from("stories").select("id,title,excerpt,category,created_at,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)").eq("author_id", profileRow.id).eq("status", "published").eq("visibility", "public").order("published_at", { ascending: false });
-      setStories((data ?? []).map((story: any, index) => ({ id: story.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
+      setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
     };
     void load();
   }, [username]);
@@ -1015,6 +1030,9 @@ type DashboardStats = {
   shares: number;
   stories: { id: string; title: string; created_at: string }[];
   viewsByDay: number[];
+  likesByDay: number[];
+  favoritesByDay: number[];
+  sharesByDay: number[];
 };
 
 function Dashboard({
@@ -1041,7 +1059,7 @@ function Dashboard({
         .eq("author_id", user.id)
         .order("created_at", { ascending: false });
       const authoredStories = storyRows ?? [];
-      const storyIds = authoredStories.map((story) => story.id);
+      const storyIds = authoredStories.map((story: { id: string }) => story.id);
       if (storyIds.length === 0) {
         if (active) {
           setStats({
@@ -1051,11 +1069,26 @@ function Dashboard({
             shares: 0,
             stories: [],
             viewsByDay: Array(12).fill(0),
+            likesByDay: Array(12).fill(0),
+            favoritesByDay: Array(12).fill(0),
+            sharesByDay: Array(12).fill(0),
           });
           setLoading(false);
         }
         return;
       }
+
+      const buildSeries = (rows: Array<{ created_at: string }> | null) => {
+        const series = Array(12).fill(0) as number[];
+        (rows ?? []).forEach((row) => {
+          const day = Math.floor(
+            (Date.now() - new Date(row.created_at).getTime()) / 86400000,
+          );
+          if (day >= 0 && day < 12) series[11 - day] += 1;
+        });
+        return series;
+      };
+
       const countFor = async (
         table: "story_views" | "likes" | "favorites" | "story_shares",
       ) => {
@@ -1065,31 +1098,58 @@ function Dashboard({
           .in("story_id", storyIds);
         return count ?? 0;
       };
-      const [{ count: views }, likes, favorites, shares, { data: viewRows }] =
-        await Promise.all([
-          supabase
-            .from("story_views")
-            .select("id", { count: "exact", head: true })
-            .in("story_id", storyIds),
-          countFor("likes"),
-          countFor("favorites"),
-          countFor("story_shares"),
-          supabase
-            .from("story_views")
-            .select("created_at")
-            .in("story_id", storyIds)
-            .gte(
-              "created_at",
-              new Date(Date.now() - 11 * 86400000).toISOString(),
-            ),
-        ]);
-      const viewsByDay = Array(12).fill(0) as number[];
-      (viewRows ?? []).forEach((view) => {
-        const day = Math.floor(
-          (Date.now() - new Date(view.created_at).getTime()) / 86400000,
-        );
-        if (day >= 0 && day < 12) viewsByDay[11 - day] += 1;
-      });
+
+      const [
+        { count: views },
+        likes,
+        favorites,
+        shares,
+        { data: viewRows },
+        { data: likeRows },
+        { data: favoriteRows },
+        { data: shareRows },
+      ] = await Promise.all([
+        supabase
+          .from("story_views")
+          .select("id", { count: "exact", head: true })
+          .in("story_id", storyIds),
+        countFor("likes"),
+        countFor("favorites"),
+        countFor("story_shares"),
+        supabase
+          .from("story_views")
+          .select("created_at")
+          .in("story_id", storyIds)
+          .gte(
+            "created_at",
+            new Date(Date.now() - 11 * 86400000).toISOString(),
+          ),
+        supabase
+          .from("likes")
+          .select("created_at")
+          .in("story_id", storyIds)
+          .gte(
+            "created_at",
+            new Date(Date.now() - 11 * 86400000).toISOString(),
+          ),
+        supabase
+          .from("favorites")
+          .select("created_at")
+          .in("story_id", storyIds)
+          .gte(
+            "created_at",
+            new Date(Date.now() - 11 * 86400000).toISOString(),
+          ),
+        supabase
+          .from("story_shares")
+          .select("created_at")
+          .in("story_id", storyIds)
+          .gte(
+            "created_at",
+            new Date(Date.now() - 11 * 86400000).toISOString(),
+          ),
+      ]);
+
       if (active) {
         setStats({
           views: views ?? 0,
@@ -1097,7 +1157,10 @@ function Dashboard({
           favorites,
           shares,
           stories: authoredStories,
-          viewsByDay,
+          viewsByDay: buildSeries(viewRows ?? []),
+          likesByDay: buildSeries(likeRows ?? []),
+          favoritesByDay: buildSeries(favoriteRows ?? []),
+          sharesByDay: buildSeries(shareRows ?? []),
         });
         setLoading(false);
       }
@@ -1138,6 +1201,33 @@ function Dashboard({
       </section>
     );
   const maxViews = Math.max(...(stats?.viewsByDay ?? [0]), 1);
+  const metricCharts = [
+    {
+      title: "Views",
+      total: stats?.views ?? 0,
+      data: stats?.viewsByDay ?? Array(12).fill(0),
+      color: "sage",
+    },
+    {
+      title: "Likes",
+      total: stats?.likes ?? 0,
+      data: stats?.likesByDay ?? Array(12).fill(0),
+      color: "terracotta",
+    },
+    {
+      title: "Favorites",
+      total: stats?.favorites ?? 0,
+      data: stats?.favoritesByDay ?? Array(12).fill(0),
+      color: "mustard",
+    },
+    {
+      title: "Shares",
+      total: stats?.shares ?? 0,
+      data: stats?.sharesByDay ?? Array(12).fill(0),
+      color: "plum",
+    },
+  ];
+
   return (
     <section className="content-wrap dashboard-wrap">
       <div className="page-heading">
@@ -1178,7 +1268,18 @@ function Dashboard({
           icon={<Share2 size={17} />}
         />
       </div>
-      <div className="analytics-grid">
+      <div className="analytics-grid metric-grid">
+        {metricCharts.map((metric) => (
+          <MetricChartCard
+            key={metric.title}
+            title={metric.title}
+            total={metric.total}
+            data={metric.data}
+            color={metric.color as "sage" | "terracotta" | "mustard" | "plum"}
+          />
+        ))}
+      </div>
+      <div className="analytics-grid" style={{ marginTop: "20px" }}>
         <div className="analytics-card chart-card">
           <div className="analytics-header">
             <div>
@@ -1248,6 +1349,51 @@ function Dashboard({
         </div>
       </div>
     </section>
+  );
+}
+
+function MetricChartCard({
+  title,
+  total,
+  data,
+  color,
+}: {
+  title: string;
+  total: number;
+  data: number[];
+  color: "sage" | "terracotta" | "mustard" | "plum";
+}) {
+  const height = Math.max(...data, 1);
+
+  return (
+    <div className="analytics-card metric-card">
+      <div className="analytics-header metric-header">
+        <div>
+          <span className="section-kicker">Activity</span>
+          <h2>{title}</h2>
+        </div>
+        <strong>{total.toLocaleString()}</strong>
+      </div>
+      <div className="mini-chart">
+        {data.map((value, index) => (
+          <div className="mini-chart-column" key={`${title}-${index}`}>
+            <div
+              className={`mini-chart-bar mini-chart-${color}`}
+              style={{
+                height: `${Math.max((value / height) * 100, value ? 8 : 2)}%`,
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mini-chart-labels">
+        {data.map((_, index) => (
+          <span key={`${title}-label-${index}`}>
+            {index === 0 ? "12d" : index === 6 ? "6d" : index === 11 ? "Now" : ""}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1519,13 +1665,13 @@ function ReaderModal({
   const [pageIndex, setPageIndex] = useState(0);
   useEffect(() => {
     let active = true;
-    supabase.from("story_pages").select("page_number,content").eq("story_id", story.id).order("page_number", { ascending: true }).then(({ data }) => {
-      if (active && data?.length) { setPages(data.map((page) => page.content)); setPageIndex(0); }
+    supabase.from("story_pages").select("page_number,content").eq("story_id", story.id).order("page_number", { ascending: true }).then(({ data }: { data: Array<{ page_number: number; content: string }> | null }) => {
+      if (active && data?.length) { setPages(data.map((page: { content: string }) => page.content)); setPageIndex(0); }
     });
     return () => { active = false; };
   }, [story.id, story.excerpt]);
   useEffect(() => {
-    supabase.from("story_views").insert({ story_id: story.id, user_id: user?.id ?? null }).then(({ error }) => {
+    supabase.from("story_views").insert({ story_id: story.id, user_id: user?.id ?? null }).then(({ error }: { error: { message: string } | null }) => {
       if (error) onViewError(error.message);
     });
   }, [story.id, user?.id]);
