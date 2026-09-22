@@ -86,12 +86,27 @@
 .person-avatar { display:grid; place-items:center; width:34px; height:34px; overflow:hidden; border-radius:50%; background:var(--sage-soft); color:var(--sage); font-size:10px; font-weight:700; }
 .person-avatar img { width:100%; height:100%; object-fit:cover; }
 .admin-wrap h1 { margin:0; font-family:"Libre Baskerville",serif; font-size:clamp(2.4rem,4vw,4rem); font-weight:400; }
-.admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:40px; }
+.admin-grid { display:grid; grid-template-columns:380px minmax(0,1fr); gap:18px; margin-top:40px; }
 .admin-grid h2 { margin:8px 0 22px; font-family:"Libre Baskerville",serif; font-size:23px; font-weight:400; }
-.admin-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-top:1px solid var(--line); }
-.admin-row > span:nth-child(2),.admin-row > span:first-child:not(.avatar) { display:grid; gap:3px; flex:1; }
-.admin-row strong { font-size:11px; font-weight:600; }
-.admin-row small { color:var(--muted); font-size:9px; }
+.admin-user-list { display:grid; gap:12px; max-height:560px; overflow:auto; padding-right:6px; }
+.admin-user-card { display:flex; align-items:center; gap:10px; width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); text-align:left; }
+.admin-user-card.selected { border-color:var(--sage); background:var(--sage-soft); }
+.admin-user-card strong { display:block; font-size:11px; font-weight:600; }
+.admin-user-card small { color:var(--muted); font-size:9px; }
+.admin-user-meta { margin-left:auto; color:var(--muted); font-size:9px; }
+.admin-editor-panel { min-width:0; }
+.admin-editor-form { display:grid; gap:14px; }
+.admin-editor-form label { display:grid; gap:7px; color:var(--muted); font-size:10px; font-weight:600; }
+.admin-editor-form input,.admin-editor-form textarea { width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); font-size:12px; }
+.admin-editor-form textarea { min-height:90px; resize:vertical; }
+.admin-avatar-preview { display:flex; align-items:center; justify-content:center; width:72px; height:72px; overflow:hidden; border:1px solid var(--line); border-radius:50%; background:var(--sage-soft); color:var(--sage); font-size:16px; font-weight:700; }
+.admin-avatar-preview img { width:100%; height:100%; object-fit:cover; }
+.admin-editor-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px; }
+.admin-story-panel { margin-top:24px; }
+.admin-story-scroll { display:grid; gap:10px; max-height:260px; overflow:auto; padding-right:6px; }
+.admin-story-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid var(--line); border-radius:9px; background:var(--paper); }
+.admin-story-item strong { display:block; font-size:11px; }
+.admin-story-item small { color:var(--muted); font-size:9px; }
 .description-field { display:grid; position:relative; gap:7px; margin:0 0 22px; color:var(--muted); font-size:10px; font-weight:600; }
 .description-field textarea { min-height:70px; padding:10px 11px; resize:vertical; border:1px solid var(--line); border-radius:6px; outline:0; background:var(--paper); color:var(--ink); font-size:12px; line-height:1.5; }
 .description-field textarea:focus { border-color:var(--sage); }
