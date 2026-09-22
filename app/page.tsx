@@ -83,6 +83,7 @@ export default function HomePage() {
   const [liked, setLiked] = useState<string[]>([]);
   const [saved, setSaved] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
+  const [followingPeople, setFollowingPeople] = useState<FollowPerson[]>([]);
   const [toast, setToast] = useState("");
   const [pages, setPages] = useState([""]);
   const [activePage, setActivePage] = useState(0);
@@ -109,18 +110,28 @@ export default function HomePage() {
   const refreshFollowingState = async (userId: string | null) => {
     if (!userId) {
       setFollowing([]);
+      setFollowingPeople([]);
       return;
     }
+
     const { data } = await supabase
       .from("follows")
-      .select("following_id,profiles!follows_following_id_fkey(username)")
-      .eq("follower_id", userId);
+      .select("following_id,created_at,profiles!follows_following_id_fkey(id,username,display_name,avatar_url)")
+      .eq("follower_id", userId)
+      .order("created_at", { ascending: false });
 
-    const nextFollowing = (data ?? []).flatMap((row: { profiles?: { username?: string } | { username?: string }[] | null }) => {
+    const nextFollowing = (data ?? []).flatMap((row: { profiles?: FollowPerson | FollowPerson[] | null }) => {
       const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
       return profile?.username ? [profile.username] : [];
     });
+
+    const people = (data ?? []).flatMap((row: { profiles?: FollowPerson | FollowPerson[] | null }) => {
+      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      return profile ? [profile] : [];
+    });
+
     setFollowing(nextFollowing);
+    setFollowingPeople(people);
   };
   const loadStories = async () => {
     const { data } = await supabase
@@ -495,6 +506,7 @@ export default function HomePage() {
           <FollowingView
             setView={setView}
             user={user}
+            followingPeople={followingPeople}
             stories={stories.filter((story) =>
               following.includes(story.handle),
             )}
@@ -690,6 +702,7 @@ function Discover({
 function FollowingView({
   setView,
   user,
+  followingPeople,
   stories,
   liked,
   saved,
@@ -702,6 +715,7 @@ function FollowingView({
 }: {
   setView: (view: string) => void;
   user: User | null;
+  followingPeople: FollowPerson[];
   stories: Story[];
   liked: string[];
   saved: string[];
@@ -740,10 +754,12 @@ function FollowingView({
         </button>
       </div>
       <div className="following-banner">
-        <div className="stacked-avatars">
-          <div className="avatar avatar-sage">MP</div>
-          <div className="avatar avatar-rose">JR</div>
-          <div className="avatar avatar-ochre">TB</div>
+        <div className="stacked-avatars" aria-label="People you recently followed">
+          {followingPeople.slice(0, 3).map((person) => (
+            <div className="avatar avatar-sage" key={person.id} title={person.display_name}>
+              {person.avatar_url ? <img src={person.avatar_url} alt={person.display_name} /> : person.display_name.slice(0, 2).toUpperCase()}
+            </div>
+          ))}
         </div>
         <span>
           You&apos;re following <strong>{following.length} writers</strong>

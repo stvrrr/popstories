@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap");
 
+.stacked-avatars .avatar img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
 :root { --paper:#f8eee8; --raised:#fffaf7; --ink:#2b211d; --muted:#806c63; --faint:#b6a097; --line:#eadbd2; --sage:#925b48; --sage-soft:#f1dfd5; --terra:#b96d56; --ochre:#b48768; --plum:#563b35; --shadow:0 14px 32px rgba(91,57,43,.08); }
 * { box-sizing:border-box; } html, body { margin:0; min-height:100%; } body { background:var(--paper); color:var(--ink); font-family:"DM Sans",sans-serif; } button,input,textarea,select { font:inherit; } button { border:0; cursor:pointer; } button:disabled { cursor:not-allowed; opacity:.35; }
 .app-shell { display:flex; min-height:100svh; background:var(--paper); transition:background .25s,color .25s; } .dark-mode { --paper:#241d1a; --raised:#302522; --ink:#f7eee9; --muted:#c1aaa0; --faint:#8d746b; --line:#493732; --sage-soft:#49332d; --shadow:0 18px 45px rgba(0,0,0,.22); }
