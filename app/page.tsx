@@ -41,6 +41,7 @@ type Story = {
   category: string;
   readTime: string;
   date: string;
+  createdAt?: string;
   accent: string;
   likes: number;
   avatarUrl: string;
@@ -209,6 +210,7 @@ export default function HomePage() {
         category: story.category ?? "Personal essays",
         readTime: getReadTime(pageContent[index]),
         date: new Date(story.created_at).toLocaleDateString(),
+        createdAt: story.created_at,
         accent: ["sage", "terracotta", "mustard"][index % 3],
         likes: story.likes?.[0]?.count ?? 0,
         avatarUrl: profile?.avatar_url ?? "",
@@ -706,6 +708,7 @@ function Discover({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [genreFilter, setGenreFilter] = useState("all");
+  const [storyFilter, setStoryFilter] = useState("all");
 
   if (!stories.length) {
     return (
@@ -718,11 +721,26 @@ function Discover({
     );
   }
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredStories = stories.filter((story) => {
+  const matchingStories = stories.filter((story) => {
     const matchesTitle = !normalizedQuery || story.title.toLowerCase().includes(normalizedQuery);
     const matchesGenre = genreFilter === "all" || story.category.split(", ").includes(genreFilter);
     return matchesTitle && matchesGenre;
   });
+  const now = Date.now();
+  const filteredStories = matchingStories
+    .filter((story) => {
+      const ageInDays = (now - new Date(story.createdAt ?? story.date).getTime()) / 86400000;
+      const readMinutes = Number.parseInt(story.readTime, 10);
+      if (storyFilter === "hot") return ageInDays >= 0 && ageInDays <= 7 && story.likes > 0;
+      if (storyFilter === "short") return readMinutes <= 5;
+      if (storyFilter === "long") return readMinutes > 5;
+      return true;
+    })
+    .sort((left, right) => {
+      if (storyFilter === "popular" || storyFilter === "hot") return right.likes - left.likes;
+      if (storyFilter === "recent") return new Date(right.createdAt ?? right.date).getTime() - new Date(left.createdAt ?? left.date).getTime();
+      return 0;
+    });
   return (
     <section className="content-wrap">
       <div className="welcome-row">
@@ -768,6 +786,17 @@ function Discover({
           <select value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)} aria-label="Filter stories by genre">
             <option value="all">All genres</option>
             {GENRES.map((genre) => <option key={genre} value={genre}>{genre}</option>)}
+          </select>
+        </label>
+        <label className="discover-genre-filter">
+          <span>Browse</span>
+          <select value={storyFilter} onChange={(event) => setStoryFilter(event.target.value)} aria-label="Filter stories by popularity and length">
+            <option value="all">All stories</option>
+            <option value="popular">Popular</option>
+            <option value="hot">Hot</option>
+            <option value="recent">New / Recent</option>
+            <option value="short">Short read</option>
+            <option value="long">Long read</option>
           </select>
         </label>
       </div>
@@ -1117,7 +1146,7 @@ function PublicProfile({
       if (!profileRow) return;
       setProfile(profileRow as Profile);
       const { data } = await supabase.from("stories").select("id,title,excerpt,category,created_at,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)").eq("author_id", profileRow.id).eq("status", "published").eq("visibility", "public").order("published_at", { ascending: false });
-      setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, authorId: profileRow.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
+      setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, authorId: profileRow.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), createdAt: story.created_at, accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
       await loadFollowCounts(profileRow.id);
     };
     void load();
