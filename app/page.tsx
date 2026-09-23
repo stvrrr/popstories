@@ -49,8 +49,56 @@ type Story = {
   isPinned?: boolean;
   pinLabel?: string | null;
 };
-type Profile = { id?: string; username: string; display_name: string; bio: string; avatar_url: string };
+type Profile = { id?: string; username: string; display_name: string; bio: string; avatar_url: string; profile_links: string[] };
 type NotificationItem = { id: string; kind: "like" | "favorite"; actor: string; actorAvatar: string | null; storyTitle: string; createdAt: string };
+const PROFILE_LINK_LIMIT = 3;
+const BLOCKED_PROFILE_LINK_PATTERNS = ["nsfw", "adult", "porn", "xxx", "sex", "18+", "18plus", "onlyfans", "fetish", "lewd", "nude", "erotic"];
+
+function normalizeProfileLinks(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, PROFILE_LINK_LIMIT);
+}
+
+function sanitizeProfileLinks(linkValues: string[]) {
+  const cleaned = linkValues
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, PROFILE_LINK_LIMIT);
+
+  const sanitized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const rawLink of cleaned) {
+    const candidate = /^https?:\/\//i.test(rawLink) ? rawLink : rawLink.startsWith("www.") ? `https://${rawLink}` : `https://${rawLink}`;
+
+    try {
+      const parsed = new URL(candidate);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        throw new Error("Invalid link protocol.");
+      }
+
+      const blockedText = `${parsed.hostname} ${parsed.pathname} ${parsed.search}`.toLowerCase();
+      if (BLOCKED_PROFILE_LINK_PATTERNS.some((pattern) => blockedText.includes(pattern))) {
+        throw new Error("NSFW or 18+ profile links are not allowed.");
+      }
+
+      const normalized = parsed.toString().replace(/\/$/, "");
+      if (!seen.has(normalized)) {
+        sanitized.push(normalized);
+        seen.add(normalized);
+      }
+    } catch {
+      throw new Error("Each profile link must be a valid URL and cannot be NSFW or 18+.");
+    }
+  }
+
+  return sanitized;
+}
+
 function getReadTime(text: string) {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return `${Math.max(1, Math.ceil(words / 200))} min read`;
@@ -1073,15 +1121,15 @@ function FollowDirectory({ user, profileId, counts, onAuthor }: { user: User | n
 }
 
 function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOut: () => Promise<void>; onSaved: () => Promise<void> }) {
-  const [profile, setProfile] = useState<Profile>({ username: "", display_name: "", bio: "", avatar_url: "" });
+  const [profile, setProfile] = useState<Profile>({ username: "", display_name: "", bio: "", avatar_url: "", profile_links: [] });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    supabase.from("profiles").select("username,display_name,bio,avatar_url").eq("id", user.id).maybeSingle().then(({ data }: { data: Profile | null }) => {
-      if (data) setProfile({ username: data.username ?? "", display_name: data.display_name ?? "", bio: data.bio ?? "", avatar_url: data.avatar_url ?? "" });
+    supabase.from("profiles").select("username,display_name,bio,avatar_url,profile_links").eq("id", user.id).maybeSingle().then(({ data }: { data: Profile | null }) => {
+      if (data) setProfile({ username: data.username ?? "", display_name: data.display_name ?? "", bio: data.bio ?? "", avatar_url: data.avatar_url ?? "", profile_links: normalizeProfileLinks(data.profile_links ?? []) });
       setLoading(false);
     });
   }, [user]);
@@ -1095,12 +1143,34 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
       if (uploadError) { setMessage(`Avatar upload failed: ${uploadError.message}`); setSaving(false); return; }
       avatarUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
     }
-    const { error } = await supabase.from("profiles").update({ username: profile.username.trim().toLowerCase(), display_name: profile.display_name.trim(), bio: profile.bio.trim(), avatar_url: avatarUrl }).eq("id", user.id).select("id").single();
+
+    let profileLinks: string[] = [];
+    try {
+      profileLinks = sanitizeProfileLinks(Array.from({ length: PROFILE_LINK_LIMIT }, (_, index) => profile.profile_links[index] ?? ""));
+    } catch (error) {
+      setSaving(false);
+      setMessage(error instanceof Error ? error.message : "Please add only valid, safe profile links.");
+      return;
+    }
+
+    const { error } = await supabase.from("profiles").update({ username: profile.username.trim().toLowerCase(), display_name: profile.display_name.trim(), bio: profile.bio.trim(), avatar_url: avatarUrl, profile_links: profileLinks }).eq("id", user.id).select("id").single();
     setSaving(false);
-    if (error) { setMessage(error.code === "23505" ? "That username is already taken." : error.code === "PGRST116" ? "Your profile record is missing. Run the profile setup SQL in Supabase first." : error.message); return; }
-    setProfile({ ...profile, avatar_url: avatarUrl }); setAvatarFile(null); await onSaved();
+    if (error) {
+      const friendly = error.code === "23505" ? "That username is already taken." :
+        error.code === "PGRST116" ? "Your profile record is missing. Run the profile setup SQL in Supabase first." :
+        error.message.includes("profile_links") ? "Please run the profile links migration in Supabase before saving links." : error.message;
+      setMessage(friendly);
+      return;
+    }
+    setProfile({ ...profile, avatar_url: avatarUrl, profile_links: profileLinks }); setAvatarFile(null); await onSaved();
   };
-  return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="sign-out-button" onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}><X size={15} /> Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
+  return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="sign-out-button" onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}><X size={15} /> Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{Array.from({ length: PROFILE_LINK_LIMIT }, (_, index) => (
+        <label key={`profile-link-${index}`}>Profile link {index + 1} <small>{index === 0 ? "Optional" : "Optional"}</small><input value={profile.profile_links[index] ?? ""} onChange={(event) => setProfile((current) => {
+          const nextLinks = Array.from({ length: PROFILE_LINK_LIMIT }, (_, nextIndex) => current.profile_links[nextIndex] ?? "");
+          nextLinks[index] = event.target.value;
+          return { ...current, profile_links: nextLinks };
+        })} placeholder="https://your-site.com" /></label>
+      ))}<p className="profile-hint">Up to 3 links, no NSFW or 18+ content.</p>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
 }
 
 function PublicProfile({
@@ -1170,9 +1240,14 @@ function PublicProfile({
 
   useEffect(() => {
     const load = async () => {
-      const { data: profileRow } = await supabase.from("profiles").select("id,username,display_name,bio,avatar_url").eq("username", username).maybeSingle();
+      const { data: profileRow } = await supabase.from("profiles").select("id,username,display_name,bio,avatar_url,profile_links").eq("username", username).maybeSingle();
       if (!profileRow) return;
-      setProfile(profileRow as Profile);
+      setProfile({
+        ...profileRow,
+        bio: profileRow.bio ?? "",
+        avatar_url: profileRow.avatar_url ?? "",
+        profile_links: normalizeProfileLinks(profileRow.profile_links ?? []),
+      } as Profile);
       const { data } = await supabase.from("stories").select("id,title,excerpt,category,created_at,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)").eq("author_id", profileRow.id).eq("status", "published").eq("visibility", "public").order("published_at", { ascending: false });
       setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, authorId: profileRow.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), createdAt: story.created_at, accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
       await loadFollowCounts(profileRow.id);
@@ -1180,7 +1255,7 @@ function PublicProfile({
     void load();
   }, [username, user]);
   if (!profile) return <section className="content-wrap empty-feed"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back</button><h1>Profile not found.</h1></section>;
-  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><FollowDirectory user={user} profileId={profile.id} counts={followCounts} onAuthor={onAuthor} /><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={isFollowing} onLike={() => {}} onSave={() => {}} onFollow={() => void toggleProfileFollow()} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
+  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}{profile.profile_links.length ? <div className="profile-link-list">{profile.profile_links.map((link) => { const hostname = new URL(link).hostname.replace(/^www\./, ""); return <a key={link} className="profile-link" href={link} target="_blank" rel="noreferrer noopener">{hostname}</a>; })}</div> : null}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><FollowDirectory user={user} profileId={profile.id} counts={followCounts} onAuthor={onAuthor} /><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={isFollowing} onLike={() => {}} onSave={() => {}} onFollow={() => void toggleProfileFollow()} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
 }
 
 function NotificationPanel({ user }: { user: User | null }) {
