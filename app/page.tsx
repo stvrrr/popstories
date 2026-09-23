@@ -242,6 +242,15 @@ export default function HomePage() {
     return () => listener.subscription.unsubscribe();
   }, [supabase]);
   useEffect(() => {
+    if (!stories.length) return;
+    const storyId = new URLSearchParams(window.location.search).get("story");
+    if (!storyId) return;
+    const sharedStory = stories.find((story) => story.id === storyId);
+    if (!sharedStory) return;
+    setReadingStory(sharedStory);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [stories]);
+  useEffect(() => {
     if (!user) { setLiked([]); setSaved([]); setFollowing([]); return; }
     Promise.all([
       supabase.from("likes").select("story_id").eq("user_id", user.id),
@@ -968,7 +977,7 @@ function StoryCard({
         <h3>{story.title}</h3>
         <p>{story.excerpt}</p>
         <div className="story-card-bottom">
-          <button className="author-chip" onClick={(event) => { event.stopPropagation(); onAuthor(); }}>
+          <button type="button" className="author-chip" onClick={(event) => { event.stopPropagation(); onAuthor(); }} aria-label={`Open ${story.author}'s profile`}>
             {story.avatarUrl ? <img className="avatar avatar-image" src={story.avatarUrl} alt="" /> : <span className={`avatar avatar-${story.accent}`}>{story.initials}</span>}
             <span>
               <strong>{story.author}</strong>
