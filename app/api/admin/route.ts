@@ -10,12 +10,27 @@ export async function GET() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) return Response.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not configured" }, { status: 503 });
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
-  const [{ data: users }, { data: stories }, { data: settings }] = await Promise.all([
+  const [{ data: users, error: usersError }, storyResult, { data: settings, error: settingsError }] = await Promise.all([
     admin.from("profiles").select("id,username,display_name,bio,avatar_url,created_at").order("created_at", { ascending: false }),
-    admin.from("stories").select("id,title,status,visibility,author_id,created_at,is_pinned").order("created_at", { ascending: false }),
+    admin.from("stories").select("id,title,status,visibility,author_id,created_at,is_pinned,profiles!stories_author_id_fkey(id)").order("created_at", { ascending: false }),
     admin.from("site_settings").select("site_image_url").eq("id", true).maybeSingle(),
   ]);
-  return Response.json({ users: users ?? [], stories: stories ?? [], settings: settings ?? { site_image_url: null } });
+  if (usersError) return Response.json({ error: `Could not load users: ${usersError.message}` }, { status: 500 });
+  if (settingsError) return Response.json({ error: `Could not load site settings: ${settingsError.message}` }, { status: 500 });
+
+  let stories = storyResult.data;
+  let pinningAvailable = true;
+  if (storyResult.error) {
+    const fallback = await admin
+      .from("stories")
+      .select("id,title,status,visibility,author_id,created_at")
+      .order("created_at", { ascending: false });
+    if (fallback.error) return Response.json({ error: `Could not load stories: ${fallback.error.message}` }, { status: 500 });
+    stories = (fallback.data ?? []).map((story) => ({ ...story, is_pinned: false, profiles: [] }));
+    pinningAvailable = false;
+  }
+
+  return Response.json({ users: users ?? [], stories: stories ?? [], pinningAvailable, settings: settings ?? { site_image_url: null } });
 }
 
 export async function PUT(request: Request) {
