@@ -675,9 +675,11 @@ export default function HomePage() {
           user={user}
           liked={liked.includes(readingStory.id)}
           saved={saved.includes(readingStory.id)}
+          following={following.includes(readingStory.authorId)}
           onClose={() => setReadingStory(null)}
           onLike={() => toggleLike(readingStory)}
           onSave={() => toggleSave(readingStory)}
+          onFollow={() => void toggleFollow(readingStory)}
           onShare={() => void shareStory(readingStory)}
           onViewError={(message) => notify(`View was not recorded: ${message}`)}
         />
@@ -2186,9 +2188,11 @@ function ReaderModal({
   user,
   liked,
   saved,
+  following,
   onClose,
   onLike,
   onSave,
+  onFollow,
   onShare,
   onViewError,
 }: {
@@ -2196,9 +2200,11 @@ function ReaderModal({
   user: User | null;
   liked: boolean;
   saved: boolean;
+  following: boolean;
   onClose: () => void;
   onLike: () => void;
   onSave: () => void;
+  onFollow: () => void;
   onShare: () => void;
   onViewError: (message: string) => void;
 }) {
@@ -2247,6 +2253,9 @@ function ReaderModal({
             <button onClick={onSave} className="reader-save">
               {saved ? "Saved" : "Save story"}{" "}
               <Bookmark size={15} fill={saved ? "currentColor" : "none"} />
+            </button>
+            <button type="button" className={`follow-chip ${following ? "following" : ""}`} onClick={onFollow}>
+              {following ? "Following" : "Follow"}
             </button>
           </div>
           <div className="reader-body">
