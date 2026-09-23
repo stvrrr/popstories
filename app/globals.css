@@ -109,6 +109,7 @@
 .admin-story-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid var(--line); border-radius:9px; background:var(--paper); }
 .admin-story-item strong { display:block; font-size:11px; }
 .admin-story-item small { color:var(--muted); font-size:9px; }
+.admin-story-actions { display:flex; align-items:center; gap:8px; }
 .admin-settings-wrap { max-width:1050px; padding-top:0; padding-bottom:20px; }
 .admin-site-settings { display:grid; gap:14px; min-height:0; }
 .admin-site-settings h2 { margin-bottom:0; }
