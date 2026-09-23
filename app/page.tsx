@@ -286,6 +286,15 @@ export default function HomePage() {
     setPages([...pages, ""]);
     setActivePage(pages.length);
   };
+  const deletePage = () => {
+    if (pages.length === 1) {
+      notify("A story needs at least one page");
+      return;
+    }
+    const nextPages = pages.filter((_, index) => index !== activePage);
+    setPages(nextPages);
+    setActivePage(Math.min(activePage, nextPages.length - 1));
+  };
   const toggleFollow = async (story: Story) => {
     if (!user) {
       setAuthMode("login");
@@ -595,6 +604,7 @@ export default function HomePage() {
             setActivePage={setActivePage}
             updatePage={updatePage}
             addPage={addPage}
+            deletePage={deletePage}
             notify={notify}
             onPublish={publishStory}
             editing={Boolean(editingStoryId)}
@@ -1789,6 +1799,7 @@ function Writer({
   setActivePage,
   updatePage,
   addPage,
+  deletePage,
   notify,
   onPublish,
   editing,
@@ -1806,11 +1817,13 @@ function Writer({
   setActivePage: (page: number) => void;
   updatePage: (value: string) => void;
   addPage: () => void;
+  deletePage: () => void;
   notify: (message: string) => void;
   onPublish: () => Promise<void>;
   editing: boolean;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [pageMenuOpen, setPageMenuOpen] = useState(false);
   const wrapSelection = (before: string, after: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -1873,12 +1886,19 @@ function Writer({
               <span className="tool-italic">I</span>
             </button>
             <span />
-            <button aria-label="Add a photo">
+            <button aria-label="Add a new page" onClick={addPage}>
               <Plus size={17} />
             </button>
-            <button aria-label="More writing tools">
+            <button aria-label="More page actions" onClick={() => setPageMenuOpen((open) => !open)}>
               <MoreHorizontal size={18} />
             </button>
+            {pageMenuOpen && (
+              <div className="page-menu">
+                <button onClick={() => { deletePage(); setPageMenuOpen(false); }}>
+                  Delete page {activePage + 1}
+                </button>
+              </div>
+            )}
           </div>
           <textarea
             ref={textareaRef}
