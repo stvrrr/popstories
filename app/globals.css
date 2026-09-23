@@ -172,3 +172,15 @@
 .genre-menu button:hover:not(:disabled),.genre-menu button.selected { background:var(--sage-soft); color:var(--sage); }
 .genre-menu button:disabled { cursor:not-allowed; opacity:.4; }
 .genre-menu button span { display:inline-block; width:10px; color:var(--sage); font-weight:700; }
+.discover-filters { display:flex; align-items:center; gap:12px; margin:0 0 17px; }
+.discover-search { display:flex; align-items:center; flex:1; gap:9px; padding:10px 12px; border:1px solid var(--line); border-radius:7px; background:var(--raised); color:var(--faint); }
+.discover-search input { width:100%; border:0; outline:0; background:transparent; color:var(--ink); font-size:12px; }
+.discover-genre-filter { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:10px; font-weight:600; }
+.discover-genre-filter select { min-width:150px; padding:10px 11px; border:1px solid var(--line); border-radius:7px; outline:0; background:var(--raised); color:var(--ink); font-size:11px; }
+.discover-empty-filter { display:grid; justify-items:center; gap:9px; padding:48px 0; color:var(--muted); font-size:12px; }
+.discover-empty-filter p { margin:0; }
+@media (max-width:680px) {
+	.discover-filters { display:grid; align-items:stretch; }
+	.discover-genre-filter { justify-content:space-between; }
+	.discover-genre-filter select { flex:1; }
+}

@@ -535,11 +535,6 @@ export default function HomePage() {
             <strong>{view}</strong>
           </div>
           <div className="top-actions">
-            <label className="search-box">
-              <Search size={17} />
-              <input placeholder="Search stories" aria-label="Search stories" />
-              <kbd>⌘ K</kbd>
-            </label>
             <button
               className="icon-button notification-button"
               onClick={() => setNotificationsOpen((open) => !open)}
@@ -709,6 +704,9 @@ function Discover({
   onFollow: (story: Story) => void;
   onAuthor: (username: string) => void;
 }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [genreFilter, setGenreFilter] = useState("all");
+
   if (!stories.length) {
     return (
       <section className="content-wrap empty-feed">
@@ -719,6 +717,12 @@ function Discover({
       </section>
     );
   }
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredStories = stories.filter((story) => {
+    const matchesTitle = !normalizedQuery || story.title.toLowerCase().includes(normalizedQuery);
+    const matchesGenre = genreFilter === "all" || story.category.split(", ").includes(genreFilter);
+    return matchesTitle && matchesGenre;
+  });
   return (
     <section className="content-wrap">
       <div className="welcome-row">
@@ -749,8 +753,26 @@ function Discover({
           View all <ChevronRight size={15} />
         </button>
       </div>
+      <div className="discover-filters">
+        <label className="discover-search">
+          <Search size={17} />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search story titles"
+            aria-label="Search story titles"
+          />
+        </label>
+        <label className="discover-genre-filter">
+          <span>Genre</span>
+          <select value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)} aria-label="Filter stories by genre">
+            <option value="all">All genres</option>
+            {GENRES.map((genre) => <option key={genre} value={genre}>{genre}</option>)}
+          </select>
+        </label>
+      </div>
       <div className="story-list">
-        {stories.map((story) => (
+        {filteredStories.map((story) => (
           <StoryCard
             key={story.id}
             story={story}
@@ -765,6 +787,12 @@ function Discover({
           />
         ))}
       </div>
+      {!filteredStories.length && (
+        <div className="discover-empty-filter">
+          <Search size={20} />
+          <p>No stories match that search.</p>
+        </div>
+      )}
     </section>
   );
 }
