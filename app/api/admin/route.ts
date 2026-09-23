@@ -12,7 +12,7 @@ export async function GET() {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const [{ data: users, error: usersError }, storyResult, { data: settings, error: settingsError }] = await Promise.all([
     admin.from("profiles").select("id,username,display_name,bio,avatar_url,created_at").order("created_at", { ascending: false }),
-    admin.from("stories").select("id,title,status,visibility,author_id,created_at,is_pinned,profiles!stories_author_id_fkey(id)").order("created_at", { ascending: false }),
+    admin.from("stories").select("id,title,status,visibility,author_id,created_at,is_pinned,pin_label,profiles!stories_author_id_fkey(id)").order("created_at", { ascending: false }),
     admin.from("site_settings").select("site_image_url").eq("id", true).maybeSingle(),
   ]);
   if (usersError) return Response.json({ error: `Could not load users: ${usersError.message}` }, { status: 500 });
@@ -26,7 +26,7 @@ export async function GET() {
       .select("id,title,status,visibility,author_id,created_at")
       .order("created_at", { ascending: false });
     if (fallback.error) return Response.json({ error: `Could not load stories: ${fallback.error.message}` }, { status: 500 });
-    stories = (fallback.data ?? []).map((story) => ({ ...story, is_pinned: false, profiles: [] }));
+    stories = (fallback.data ?? []).map((story) => ({ ...story, is_pinned: false, pin_label: null, profiles: [] }));
     pinningAvailable = false;
   }
 
@@ -39,7 +39,7 @@ export async function PUT(request: Request) {
   if (!user || user.id !== adminUserId) return Response.json({ error: "Forbidden" }, { status: 403 });
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) return Response.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not configured" }, { status: 503 });
-  const { id, type, username, display_name, bio, avatar_url, site_image_url, is_pinned } = await request.json() as {
+  const { id, type, username, display_name, bio, avatar_url, site_image_url, is_pinned, pin_label } = await request.json() as {
     type?: "profile" | "settings" | "pin-story";
     id?: string;
     username?: string;
@@ -48,6 +48,7 @@ export async function PUT(request: Request) {
     avatar_url?: string | null;
     site_image_url?: string | null;
     is_pinned?: boolean;
+    pin_label?: string | null;
   };
   if (type === "settings") {
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -58,7 +59,7 @@ export async function PUT(request: Request) {
   if (type === "pin-story") {
     if (!id || typeof is_pinned !== "boolean") return Response.json({ error: "id and is_pinned are required" }, { status: 400 });
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
-    const { error } = await admin.from("stories").update({ is_pinned }).eq("id", id);
+    const { error } = await admin.from("stories").update({ is_pinned, pin_label: is_pinned ? pin_label?.trim().slice(0, 40) || "Pinned" : null }).eq("id", id);
     if (error) return Response.json({ error: error.message }, { status: 400 });
     return Response.json({ ok: true });
   }

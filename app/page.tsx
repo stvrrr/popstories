@@ -46,6 +46,7 @@ type Story = {
   accent: string;
   likes: number;
   avatarUrl: string;
+  pinLabel?: string | null;
 };
 type Profile = { id?: string; username: string; display_name: string; bio: string; avatar_url: string };
 type NotificationItem = { id: string; kind: "like" | "favorite"; actor: string; actorAvatar: string | null; storyTitle: string; createdAt: string };
@@ -173,14 +174,21 @@ export default function HomePage() {
     setFollowingPeople(people);
   };
   const loadStories = async () => {
-    const { data } = await supabase
+    const storySelect = "id,title,excerpt,category,created_at,author_id,is_pinned,pin_label,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)";
+    let { data, error } = await supabase
       .from("stories")
-      .select(
-        "id,title,excerpt,category,created_at,author_id,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)",
-      )
+      .select(storySelect)
       .eq("status", "published")
       .eq("visibility", "public")
       .order("published_at", { ascending: false });
+    if (error) {
+      ({ data } = await supabase
+        .from("stories")
+        .select("id,title,excerpt,category,created_at,author_id,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)")
+        .eq("status", "published")
+        .eq("visibility", "public")
+        .order("published_at", { ascending: false }));
+    }
     const loaded = (data ?? []) as Array<{
       id: string;
       author_id: string;
@@ -188,6 +196,8 @@ export default function HomePage() {
       excerpt: string | null;
       category: string | null;
       created_at: string;
+      is_pinned?: boolean;
+      pin_label?: string | null;
       profiles: { username: string; display_name: string; avatar_url: string | null } | { username: string; display_name: string; avatar_url: string | null }[] | null;
       likes: Array<{ count: number }>;
     }>;
@@ -215,6 +225,7 @@ export default function HomePage() {
         accent: ["sage", "terracotta", "mustard"][index % 3],
         likes: story.likes?.[0]?.count ?? 0,
         avatarUrl: profile?.avatar_url ?? "",
+        pinLabel: story.is_pinned ? story.pin_label : null,
         };
       }),
     );
@@ -948,6 +959,7 @@ function StoryCard({
       <div className="story-card-main">
         <div className="story-card-meta">
           <span className="story-category">{story.category}</span>
+          {story.pinLabel && <span className="pin-badge"><Pin size={11} /> {story.pinLabel}</span>}
           <span>{story.date}</span>
         </div>
         <h3>{story.title}</h3>
@@ -1284,7 +1296,7 @@ function AdminUserPanel() {
 }
 
 function PinningPanel() {
-  const [stories, setStories] = useState<Array<{ id: string; title: string; status: string; visibility: string; is_pinned: boolean }>>([]);
+  const [stories, setStories] = useState<Array<{ id: string; title: string; status: string; visibility: string; is_pinned: boolean; pin_label: string | null }>>([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -1298,23 +1310,25 @@ function PinningPanel() {
 
   useEffect(() => { void load(); }, []);
 
-  const togglePin = async (story: { id: string; title: string; is_pinned: boolean }) => {
+  const togglePin = async (story: { id: string; title: string; is_pinned: boolean; pin_label: string | null }) => {
+    const pinLabel = story.is_pinned ? null : window.prompt("What label should appear on Discover?", story.pin_label ?? "Pinned");
+    if (!story.is_pinned && pinLabel === null) return;
     setSavingId(story.id);
     setError("");
     setMessage("");
     const nextPinned = !story.is_pinned;
-    const response = await fetch("/api/admin", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "pin-story", id: story.id, is_pinned: nextPinned }) });
+    const response = await fetch("/api/admin", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "pin-story", id: story.id, is_pinned: nextPinned, pin_label: pinLabel }) });
     const body = await response.json();
     setSavingId(null);
     if (!response.ok) {
       setError(body.error ?? "Pin update failed");
       return;
     }
-    setStories((current) => current.map((item) => item.id === story.id ? { ...item, is_pinned: nextPinned } : item));
-    setMessage(nextPinned ? `Pinned “${story.title}”.` : `Unpinned “${story.title}”.`);
+    setStories((current) => current.map((item) => item.id === story.id ? { ...item, is_pinned: nextPinned, pin_label: nextPinned ? pinLabel?.trim().slice(0, 40) || "Pinned" : null } : item));
+    setMessage(nextPinned ? `Pinned “${story.title}” as “${pinLabel?.trim().slice(0, 40) || "Pinned"}”.` : `Unpinned “${story.title}”.`);
   };
 
-  return <section className="content-wrap admin-settings-wrap"><div className="analytics-card admin-pinning-panel"><span className="section-kicker">Pinned stories</span><h2>Choose stories for the front of Discover</h2>{error ? <p className="profile-error">{error}</p> : message ? <p className="admin-success">{message}</p> : null}<div className="admin-story-scroll">{stories.length ? stories.map((story) => <div className="admin-story-item" key={story.id}><div><strong>{story.title}</strong><small>{story.visibility} · {story.status}</small></div><button type="button" className={`quiet-button ${story.is_pinned ? "selected" : ""}`} onClick={() => void togglePin(story)} disabled={savingId === story.id} aria-label={story.is_pinned ? "Unpin story" : "Pin story"} title={story.is_pinned ? "Unpin story" : "Pin story"}><Pin size={14} /></button></div>) : <p className="subtitle">No stories yet.</p>}</div></div></section>;
+  return <section className="content-wrap admin-settings-wrap"><div className="analytics-card admin-pinning-panel"><span className="section-kicker">Pinned stories</span><h2>Choose stories for the front of Discover</h2>{error ? <p className="profile-error">{error}</p> : message ? <p className="admin-success">{message}</p> : null}<div className="admin-story-scroll">{stories.length ? stories.map((story) => <div className="admin-story-item" key={story.id}><div><strong>{story.title}</strong><small>{story.visibility} · {story.status}{story.is_pinned && story.pin_label ? ` · ${story.pin_label}` : ""}</small></div><button type="button" className={`quiet-button ${story.is_pinned ? "selected" : ""}`} onClick={() => void togglePin(story)} disabled={savingId === story.id} aria-label={story.is_pinned ? "Unpin story" : "Pin story"} title={story.is_pinned ? "Unpin story" : "Pin story"}><Pin size={14} /></button></div>) : <p className="subtitle">No stories yet.</p>}</div></div></section>;
 }
 
 function ShelfView({ user, onWrite, onEdit, onDelete }: { user: User | null; onWrite: () => void; onEdit: (storyId: string) => void; onDelete: (storyId: string) => void }) {
