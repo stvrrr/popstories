@@ -161,3 +161,14 @@
 .page-menu { position:absolute; z-index:2; top:43px; right:0; min-width:150px; padding:5px; border:1px solid var(--line); border-radius:7px; background:var(--raised); box-shadow:var(--shadow); }
 .page-menu button { display:block; width:100%; height:auto; padding:8px 9px; color:var(--terra); font-size:10px; text-align:left; }
 .page-menu button:hover { background:var(--sage-soft); }
+.genre-field { display:grid; position:relative; gap:7px; margin-bottom:14px; color:var(--muted); font-size:10px; font-weight:600; }
+.genre-field > span { display:flex; justify-content:space-between; }
+.genre-field small { color:var(--faint); font-size:9px; font-weight:400; }
+.genre-select { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; padding:10px 11px; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); font-size:12px; text-align:left; }
+.genre-select span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.genre-select svg { flex:0 0 auto; color:var(--muted); }
+.genre-menu { position:absolute; z-index:3; top:58px; right:0; left:0; max-height:250px; overflow:auto; padding:5px; border:1px solid var(--line); border-radius:7px; background:var(--raised); box-shadow:var(--shadow); }
+.genre-menu button { display:flex; align-items:center; gap:6px; width:100%; padding:7px 8px; background:transparent; color:var(--muted); font-size:10px; text-align:left; }
+.genre-menu button:hover:not(:disabled),.genre-menu button.selected { background:var(--sage-soft); color:var(--sage); }
+.genre-menu button:disabled { cursor:not-allowed; opacity:.4; }
+.genre-menu button span { display:inline-block; width:10px; color:var(--sage); font-weight:700; }

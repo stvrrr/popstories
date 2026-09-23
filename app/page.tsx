@@ -66,7 +66,39 @@ function formatOrdinalDate(date = new Date()) {
   return `${weekday}, ${month} ${day}${suffix}`;
 }
 
-const PAGE_LIMIT = 620;
+const PAGE_LIMIT = 1000;
+const GENRES = [
+  "Personal essay",
+  "Memoir",
+  "Short fiction",
+  "Literary fiction",
+  "Romance",
+  "Mystery",
+  "Thriller",
+  "Horror",
+  "Fantasy",
+  "Science fiction",
+  "Historical fiction",
+  "Adventure",
+  "Poetry",
+  "Humor",
+  "Satire",
+  "Coming of age",
+  "Travel",
+  "Nature",
+  "Food",
+  "Culture",
+  "Relationships",
+  "Family",
+  "Wellness",
+  "Self-growth",
+  "Opinion",
+  "Journalism",
+  "Technology",
+  "Work and career",
+  "Spirituality",
+  "Creative nonfiction",
+];
 const navItems = [
   { label: "Discover", icon: Home },
   { label: "Following", icon: Users },
@@ -91,6 +123,7 @@ export default function HomePage() {
   const [activePage, setActivePage] = useState(0);
   const [storyTitle, setStoryTitle] = useState("");
   const [storyDescription, setStoryDescription] = useState("");
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [storyVisibility, setStoryVisibility] = useState<"public" | "followers" | "private">("public");
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
   const [publicProfileUsername, setPublicProfileUsername] = useState<string | null>(null);
@@ -279,7 +312,7 @@ export default function HomePage() {
   };
   const updatePage = (value: string) => {
     const next = [...pages];
-    next[activePage] = value;
+    next[activePage] = value.slice(0, PAGE_LIMIT);
     setPages(next);
   };
   const addPage = () => {
@@ -341,13 +374,14 @@ export default function HomePage() {
       return;
     }
     const excerpt = storyDescription.trim().slice(0, 240);
+    const category = selectedGenres.join(", ") || "Personal essay";
     if (editingStoryId) {
-      const { error } = await supabase.from("stories").update({ title: storyTitle.trim(), excerpt, visibility: storyVisibility, updated_at: new Date().toISOString() }).eq("id", editingStoryId).eq("author_id", user.id);
+      const { error } = await supabase.from("stories").update({ title: storyTitle.trim(), excerpt, category, visibility: storyVisibility, updated_at: new Date().toISOString() }).eq("id", editingStoryId).eq("author_id", user.id);
       if (error) { notify(error.message); return; }
       await supabase.from("story_pages").delete().eq("story_id", editingStoryId);
       const { error: pageError } = await supabase.from("story_pages").insert(pages.map((content, index) => ({ story_id: editingStoryId, page_number: index + 1, content })));
       if (pageError) { notify(pageError.message); return; }
-      setEditingStoryId(null); setStoryTitle(""); setStoryDescription(""); setStoryVisibility("public"); setPages([""]); setActivePage(0); await loadStories(); setView("Shelf"); notify("Your story was updated"); return;
+      setEditingStoryId(null); setStoryTitle(""); setStoryDescription(""); setSelectedGenres([]); setStoryVisibility("public"); setPages([""]); setActivePage(0); await loadStories(); setView("Shelf"); notify("Your story was updated"); return;
     }
     const { data: story, error } = await supabase
       .from("stories")
@@ -355,7 +389,7 @@ export default function HomePage() {
         author_id: user.id,
         title: storyTitle.trim(),
         excerpt,
-        category: "Personal essays",
+        category,
         visibility: storyVisibility,
         status: "published",
         published_at: new Date().toISOString(),
@@ -382,6 +416,7 @@ export default function HomePage() {
     }
     setStoryTitle("");
     setStoryDescription("");
+    setSelectedGenres([]);
     setStoryVisibility("public");
     setPages([""]);
     setActivePage(0);
@@ -571,15 +606,16 @@ export default function HomePage() {
         {view === "Shelf" && (
           <ShelfView user={user} onWrite={() => { setEditingStoryId(null); setView("Write"); }} onEdit={async (storyId) => {
             const [{ data: story }, { data: pageRows }] = await Promise.all([
-              supabase.from("stories").select("id,title,excerpt,visibility").eq("id", storyId).single(),
+              supabase.from("stories").select("id,title,excerpt,category,visibility").eq("id", storyId).single(),
               supabase.from("story_pages").select("page_number,content").eq("story_id", storyId).order("page_number"),
             ]);
             if (!story) { notify("That story could not be found"); return; }
             setEditingStoryId(story.id);
             setStoryTitle(story.title);
             setStoryDescription(story.excerpt ?? "");
+            setSelectedGenres(story.category ? story.category.split(", ").filter((genre: string) => GENRES.includes(genre)).slice(0, 3) : []);
             setStoryVisibility(story.visibility ?? "public");
-            setPages(pageRows?.map((page: { content: string }) => page.content) ?? [""]);
+            setPages(pageRows?.map((page: { content: string }) => page.content.slice(0, PAGE_LIMIT)) ?? [""]);
             setActivePage(0);
             setView("Write");
           }} onDelete={async (storyId) => {
@@ -597,6 +633,8 @@ export default function HomePage() {
             setStoryTitle={setStoryTitle}
             storyDescription={storyDescription}
             setStoryDescription={setStoryDescription}
+            selectedGenres={selectedGenres}
+            setSelectedGenres={setSelectedGenres}
             storyVisibility={storyVisibility}
             setStoryVisibility={setStoryVisibility}
             pages={pages}
@@ -1792,6 +1830,8 @@ function Writer({
   setStoryTitle,
   storyDescription,
   setStoryDescription,
+  selectedGenres,
+  setSelectedGenres,
   storyVisibility,
   setStoryVisibility,
   pages,
@@ -1810,6 +1850,8 @@ function Writer({
   setStoryTitle: (value: string) => void;
   storyDescription: string;
   setStoryDescription: (value: string) => void;
+  selectedGenres: string[];
+  setSelectedGenres: (genres: string[]) => void;
   storyVisibility: "public" | "followers" | "private";
   setStoryVisibility: (value: "public" | "followers" | "private") => void;
   pages: string[];
@@ -1824,6 +1866,7 @@ function Writer({
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
+  const [genreMenuOpen, setGenreMenuOpen] = useState(false);
   const wrapSelection = (before: string, after: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -1904,6 +1947,7 @@ function Writer({
             ref={textareaRef}
             className="story-textarea"
             value={pages[activePage]}
+            maxLength={PAGE_LIMIT}
             onChange={(event) => updatePage(event.target.value)}
             placeholder="Start with the moment you knew..."
           />
@@ -1950,10 +1994,31 @@ function Writer({
             <span>Story details</span>
             <Sparkles size={16} />
           </div>
-          <label>
-            Topic or feeling
-            <input placeholder="e.g. growing up, home" />
-          </label>
+          <div className="genre-field">
+            <span>Genres <small>Choose up to 3</small></span>
+            <button className="genre-select" onClick={() => setGenreMenuOpen((open) => !open)} aria-expanded={genreMenuOpen}>
+              <span>{selectedGenres.length ? selectedGenres.join(", ") : "Choose genres"}</span>
+              <ChevronDown size={15} />
+            </button>
+            {genreMenuOpen && (
+              <div className="genre-menu">
+                {GENRES.map((genre) => {
+                  const selected = selectedGenres.includes(genre);
+                  const disabled = !selected && selectedGenres.length >= 3;
+                  return (
+                    <button
+                      key={genre}
+                      className={selected ? "selected" : ""}
+                      disabled={disabled}
+                      onClick={() => setSelectedGenres(selected ? selectedGenres.filter((item) => item !== genre) : [...selectedGenres, genre])}
+                    >
+                      <span>{selected ? "✓" : ""}</span> {genre}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <label>
             Who can read this?
             <select value={storyVisibility} onChange={(event) => setStoryVisibility(event.target.value as "public" | "followers" | "private") }>
