@@ -46,6 +46,7 @@ type Story = {
   accent: string;
   likes: number;
   avatarUrl: string;
+  isPinned?: boolean;
   pinLabel?: string | null;
 };
 type Profile = { id?: string; username: string; display_name: string; bio: string; avatar_url: string };
@@ -225,6 +226,7 @@ export default function HomePage() {
         accent: ["sage", "terracotta", "mustard"][index % 3],
         likes: story.likes?.[0]?.count ?? 0,
         avatarUrl: profile?.avatar_url ?? "",
+        isPinned: story.is_pinned ?? false,
         pinLabel: story.is_pinned ? story.pin_label : null,
         };
       }),
@@ -749,6 +751,7 @@ function Discover({
       return true;
     })
     .sort((left, right) => {
+      if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
       if (storyFilter === "popular" || storyFilter === "hot") return right.likes - left.likes;
       if (storyFilter === "recent") return new Date(right.createdAt ?? right.date).getTime() - new Date(left.createdAt ?? left.date).getTime();
       return 0;
