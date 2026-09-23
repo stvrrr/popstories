@@ -17,7 +17,6 @@ import {
   MoreHorizontal,
   Moon,
   PenLine,
-  Pin,
   Plus,
   Search,
   Send,
@@ -46,7 +45,6 @@ type Story = {
   accent: string;
   likes: number;
   avatarUrl: string;
-  isPinned?: boolean;
 };
 type Profile = { id?: string; username: string; display_name: string; bio: string; avatar_url: string };
 type NotificationItem = { id: string; kind: "like" | "favorite"; actor: string; actorAvatar: string | null; storyTitle: string; createdAt: string };
@@ -177,7 +175,7 @@ export default function HomePage() {
     const { data } = await supabase
       .from("stories")
       .select(
-        "id,title,excerpt,category,created_at,author_id,is_pinned,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)",
+        "id,title,excerpt,category,created_at,author_id,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)",
       )
       .eq("status", "published")
       .eq("visibility", "public")
@@ -189,7 +187,6 @@ export default function HomePage() {
       excerpt: string | null;
       category: string | null;
       created_at: string;
-      is_pinned: boolean | null;
       profiles: { username: string; display_name: string; avatar_url: string | null } | { username: string; display_name: string; avatar_url: string | null }[] | null;
       likes: Array<{ count: number }>;
     }>;
@@ -214,12 +211,11 @@ export default function HomePage() {
         readTime: getReadTime(pageContent[index]),
         date: new Date(story.created_at).toLocaleDateString(),
         createdAt: story.created_at,
-        isPinned: story.is_pinned ?? false,
         accent: ["sage", "terracotta", "mustard"][index % 3],
         likes: story.likes?.[0]?.count ?? 0,
         avatarUrl: profile?.avatar_url ?? "",
         };
-      }).sort((left, right) => Number(right.isPinned) - Number(left.isPinned)),
+      }),
     );
   };
   useEffect(() => {
@@ -1004,7 +1000,7 @@ type FollowPerson = {
   avatar_url: string | null;
 };
 
-function FollowDirectory({ user, profileId, onAuthor }: { user: User | null; profileId?: string; onAuthor: (username: string) => void }) {
+function FollowDirectory({ user, profileId, counts, onAuthor }: { user: User | null; profileId?: string; counts?: { following: number; followers: number }; onAuthor: (username: string) => void }) {
   const [tab, setTab] = useState<"following" | "followers">("following");
   const [people, setPeople] = useState<FollowPerson[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1040,8 +1036,8 @@ function FollowDirectory({ user, profileId, onAuthor }: { user: User | null; pro
   return (
     <div className="follow-directory">
       <div className="follow-tabs" role="tablist" aria-label="Your connections">
-        <button className={tab === "following" ? "active" : ""} onClick={() => setTab("following")} role="tab" aria-selected={tab === "following"}>Following</button>
-        <button className={tab === "followers" ? "active" : ""} onClick={() => setTab("followers")} role="tab" aria-selected={tab === "followers"}>Followers</button>
+        <button className={tab === "following" ? "active" : ""} onClick={() => setTab("following")} role="tab" aria-selected={tab === "following"}>Following{counts ? ` ${counts.following}` : ""}</button>
+        <button className={tab === "followers" ? "active" : ""} onClick={() => setTab("followers")} role="tab" aria-selected={tab === "followers"}>Followers{counts ? ` ${counts.followers}` : ""}</button>
       </div>
       {loading ? <p className="subtitle">Loading people...</p> : people.length ? <div className="people-list">{people.map((person) => <button className="person-row" key={person.id} onClick={() => onAuthor(person.username)}><span className="person-avatar">{person.avatar_url ? <img src={person.avatar_url} alt="" /> : person.display_name.slice(0, 2).toUpperCase()}</span><span><strong>{person.display_name}</strong><small>@{person.username}</small></span><ChevronRight size={15} /></button>)}</div> : <p className="subtitle">No {tab} yet.</p>}
     </div>
@@ -1105,7 +1101,20 @@ function PublicProfile({
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
   const [loadingFollow, setLoadingFollow] = useState(false);
+  const [followCounts, setFollowCounts] = useState({ following: 0, followers: 0 });
   const isFollowing = Boolean(profile?.id && following.includes(profile.id));
+
+  const loadFollowCounts = async (profileId: string) => {
+    const [{ count: followingCount }, { count: followersCount }] = await Promise.all([
+      supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", profileId),
+      supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", profileId),
+    ]);
+
+    setFollowCounts({
+      following: followingCount ?? 0,
+      followers: followersCount ?? 0,
+    });
+  };
 
   const toggleProfileFollow = async () => {
     if (!profile || !user || !profile.id) {
@@ -1126,6 +1135,7 @@ function PublicProfile({
     }
 
     const nextValue = !isFollowing;
+    await loadFollowCounts(profile.id);
     await refreshFollowingState(user.id);
     notify(nextValue ? `Following ${profile.display_name}` : `Unfollowed ${profile.display_name}`);
   };
@@ -1137,11 +1147,12 @@ function PublicProfile({
       setProfile(profileRow as Profile);
       const { data } = await supabase.from("stories").select("id,title,excerpt,category,created_at,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)").eq("author_id", profileRow.id).eq("status", "published").eq("visibility", "public").order("published_at", { ascending: false });
       setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, authorId: profileRow.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), createdAt: story.created_at, accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
+      await loadFollowCounts(profileRow.id);
     };
     void load();
   }, [username, user]);
   if (!profile) return <section className="content-wrap empty-feed"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back</button><h1>Profile not found.</h1></section>;
-  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div>{user?.id !== profile.id ? <button className={`primary-button profile-follow-button ${isFollowing ? "following" : ""}`} onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><FollowDirectory user={user} profileId={profile.id} onAuthor={onAuthor} /><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={isFollowing} onLike={() => {}} onSave={() => {}} onFollow={() => void toggleProfileFollow()} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
+  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><FollowDirectory user={user} profileId={profile.id} counts={followCounts} onAuthor={onAuthor} /><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={isFollowing} onLike={() => {}} onSave={() => {}} onFollow={() => void toggleProfileFollow()} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
 }
 
 function NotificationPanel({ user }: { user: User | null }) {
@@ -1219,7 +1230,7 @@ function AdminPanel() {
 }
 
 function AdminUserPanel() {
-  const [data, setData] = useState<{ users: AdminUser[]; stories: Array<{ id: string; title: string; status: string; visibility: string; author_id: string; created_at: string; is_pinned: boolean }> } | null>(null);
+  const [data, setData] = useState<{ users: AdminUser[]; stories: Array<{ id: string; title: string; status: string; visibility: string; author_id: string; created_at: string }> } | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1261,19 +1272,12 @@ function AdminUserPanel() {
     setError("");
   };
 
-  const togglePin = async (story: { id: string; is_pinned: boolean }) => {
-    const response = await fetch("/api/admin", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "pin-story", id: story.id, is_pinned: !story.is_pinned }) });
-    const body = await response.json();
-    if (!response.ok) setError(body.error ?? "Pin update failed");
-    else await load();
-  };
-
 
   const remove = async (type: "story" | "profile", id: string, label: string) => { if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return; const response = await fetch("/api/admin", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, id }) }); const body = await response.json(); if (!response.ok) setError(body.error ?? "Delete failed"); else await load(); };
 
   const selectedStories = data?.stories.filter((story) => story.author_id === selectedUserId) ?? [];
 
-  return <section className="content-wrap admin-wrap"><p className="eyebrow"><BarChart3 size={14} /> Private admin</p><h1>Manage the <em>reading room.</em></h1><p className="subtitle">Users and all stories, including private ones, are visible only to the approved admin account.</p>{error ? <p className="profile-error">{error}. Add SUPABASE_SERVICE_ROLE_KEY to Vercel if needed.</p> : !data ? <p className="subtitle">Loading admin data...</p> : <div className="admin-grid"><div className="analytics-card"><span className="section-kicker">People</span><h2>{data.users.length} users</h2><div className="admin-user-list">{data.users.map((person) => <button type="button" className={`admin-user-card ${selectedUserId === person.id ? "selected" : ""}`} key={person.id} onClick={() => setSelectedUserId(person.id)}><span className="avatar avatar-plum">{person.display_name.slice(0, 2).toUpperCase()}</span><span><strong>{person.display_name}</strong><small>@{person.username}</small></span><span className="admin-user-meta">Joined {new Date(person.created_at).toLocaleDateString()}</span></button>)}</div></div><div className="analytics-card admin-editor-panel">{editingUser ? <><span className="section-kicker">Profile editor</span><h2>{editingUser.display_name}</h2><div className="admin-editor-form"><div className="admin-avatar-preview">{editingUser.avatar_url ? <img src={editingUser.avatar_url} alt="" /> : <span>{editingUser.display_name.slice(0, 2).toUpperCase()}</span>}</div><label>Display name<input value={editingUser.display_name} onChange={(event) => setEditingUser({ ...editingUser, display_name: event.target.value })} /></label><label>Username<input value={editingUser.username} onChange={(event) => setEditingUser({ ...editingUser, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} /></label><label>Avatar URL<input value={editingUser.avatar_url ?? ""} onChange={(event) => setEditingUser({ ...editingUser, avatar_url: event.target.value || null })} placeholder="https://..." /></label><label>Bio<textarea value={editingUser.bio ?? ""} onChange={(event) => setEditingUser({ ...editingUser, bio: event.target.value })} /></label><div className="admin-editor-actions"><button className="delete-button" onClick={() => remove("profile", editingUser.id, editingUser.display_name)}><X size={14} /> Delete user</button><button className="primary-button" onClick={() => void updateUser()} disabled={saving}>{saving ? "Saving..." : "Save changes"}</button></div></div><div className="admin-story-panel"><span className="section-kicker">Stories</span><div className="admin-story-scroll">{selectedStories.length ? selectedStories.map((story) => <div className="admin-story-item" key={story.id}><div><strong>{story.title}</strong><small>{story.visibility} · {story.status}</small></div><div className="admin-story-actions"><button className={`quiet-button ${story.is_pinned ? "selected" : ""}`} onClick={() => void togglePin(story)} aria-label={story.is_pinned ? "Unpin story" : "Pin story"} title={story.is_pinned ? "Unpin story" : "Pin story"}><Pin size={14} /></button><button className="delete-button" onClick={() => remove("story", story.id, story.title)} aria-label="Delete story" title="Delete story"><X size={14} /></button></div></div>) : <p className="subtitle">No stories for this user yet.</p>}</div></div></> : <p className="subtitle">Select a user to edit.</p>}</div></div>}</section>;
+  return <section className="content-wrap admin-wrap"><p className="eyebrow"><BarChart3 size={14} /> Private admin</p><h1>Manage the <em>reading room.</em></h1><p className="subtitle">Users and all stories, including private ones, are visible only to the approved admin account.</p>{error ? <p className="profile-error">{error}. Add SUPABASE_SERVICE_ROLE_KEY to Vercel if needed.</p> : !data ? <p className="subtitle">Loading admin data...</p> : <div className="admin-grid"><div className="analytics-card"><span className="section-kicker">People</span><h2>{data.users.length} users</h2><div className="admin-user-list">{data.users.map((person) => <button type="button" className={`admin-user-card ${selectedUserId === person.id ? "selected" : ""}`} key={person.id} onClick={() => setSelectedUserId(person.id)}><span className="avatar avatar-plum">{person.display_name.slice(0, 2).toUpperCase()}</span><span><strong>{person.display_name}</strong><small>@{person.username}</small></span><span className="admin-user-meta">Joined {new Date(person.created_at).toLocaleDateString()}</span></button>)}</div></div><div className="analytics-card admin-editor-panel">{editingUser ? <><span className="section-kicker">Profile editor</span><h2>{editingUser.display_name}</h2><div className="admin-editor-form"><div className="admin-avatar-preview">{editingUser.avatar_url ? <img src={editingUser.avatar_url} alt="" /> : <span>{editingUser.display_name.slice(0, 2).toUpperCase()}</span>}</div><label>Display name<input value={editingUser.display_name} onChange={(event) => setEditingUser({ ...editingUser, display_name: event.target.value })} /></label><label>Username<input value={editingUser.username} onChange={(event) => setEditingUser({ ...editingUser, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} /></label><label>Avatar URL<input value={editingUser.avatar_url ?? ""} onChange={(event) => setEditingUser({ ...editingUser, avatar_url: event.target.value || null })} placeholder="https://..." /></label><label>Bio<textarea value={editingUser.bio ?? ""} onChange={(event) => setEditingUser({ ...editingUser, bio: event.target.value })} /></label><div className="admin-editor-actions"><button className="delete-button" onClick={() => remove("profile", editingUser.id, editingUser.display_name)}><X size={14} /> Delete user</button><button className="primary-button" onClick={() => void updateUser()} disabled={saving}>{saving ? "Saving..." : "Save changes"}</button></div></div><div className="admin-story-panel"><span className="section-kicker">Stories</span><div className="admin-story-scroll">{selectedStories.length ? selectedStories.map((story) => <div className="admin-story-item" key={story.id}><div><strong>{story.title}</strong><small>{story.visibility} · {story.status}</small></div><button className="delete-button" onClick={() => remove("story", story.id, story.title)}><X size={14} /></button></div>) : <p className="subtitle">No stories for this user yet.</p>}</div></div></> : <p className="subtitle">Select a user to edit.</p>}</div></div>}</section>;
 }
 
 function ShelfView({ user, onWrite, onEdit, onDelete }: { user: User | null; onWrite: () => void; onEdit: (storyId: string) => void; onDelete: (storyId: string) => void }) {
