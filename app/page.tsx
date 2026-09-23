@@ -680,6 +680,7 @@ export default function HomePage() {
           onLike={() => toggleLike(readingStory)}
           onSave={() => toggleSave(readingStory)}
           onFollow={() => void toggleFollow(readingStory)}
+          onAuthor={() => { setReadingStory(null); setPublicProfileUsername(readingStory.handle); setView("PublicProfile"); }}
           onShare={() => void shareStory(readingStory)}
           onViewError={(message) => notify(`View was not recorded: ${message}`)}
         />
@@ -2193,6 +2194,7 @@ function ReaderModal({
   onLike,
   onSave,
   onFollow,
+  onAuthor,
   onShare,
   onViewError,
 }: {
@@ -2205,6 +2207,7 @@ function ReaderModal({
   onLike: () => void;
   onSave: () => void;
   onFollow: () => void;
+  onAuthor: () => void;
   onShare: () => void;
   onViewError: (message: string) => void;
 }) {
@@ -2243,13 +2246,15 @@ function ReaderModal({
           <span className="story-category">{story.category}</span>
           <h2>{story.title}</h2>
           <div className="reader-author">
-            {story.avatarUrl ? <img className="avatar avatar-image" src={story.avatarUrl} alt="" /> : <span className={`avatar avatar-${story.accent}`}>{story.initials}</span>}
-            <span>
-              <strong>{story.author}</strong>
-              <small>
-                {story.readTime} · {story.date}
-              </small>
-            </span>
+            <button type="button" className="author-chip reader-author-profile" onClick={onAuthor} aria-label={`Open ${story.author}'s profile`}>
+              {story.avatarUrl ? <img className="avatar avatar-image" src={story.avatarUrl} alt="" /> : <span className={`avatar avatar-${story.accent}`}>{story.initials}</span>}
+              <span>
+                <strong>{story.author}</strong>
+                <small>
+                  {story.readTime} · {story.date}
+                </small>
+              </span>
+            </button>
             <button onClick={onSave} className="reader-save">
               {saved ? "Saved" : "Save story"}{" "}
               <Bookmark size={15} fill={saved ? "currentColor" : "none"} />
