@@ -35,7 +35,7 @@ export async function GET(request) {
 
   const { data: story, error } = await admin
     .from("stories")
-    .select("id,title,author_id,profiles!stories_author_id_fkey(display_name)")
+    .select("id,title,author_id,profiles!stories_author_id_fkey(display_name,avatar_url)")
     .eq("status", "published")
     .eq("visibility", "public")
     .is("discord_posted_at", null)
@@ -50,25 +50,26 @@ export async function GET(request) {
     return Response.json({ story: null }, { headers: { "Cache-Control": "no-store" } });
   }
 
-  const [{ data: pages, error: pagesError }] = await Promise.all([
-    admin
-      .from("story_pages")
-      .select("page_number,content")
-      .eq("story_id", story.id)
-      .order("page_number", { ascending: true }),
-  ]);
-  if (pagesError) {
+  const { data: firstPage, error: pageError } = await admin
+    .from("story_pages")
+    .select("content")
+    .eq("story_id", story.id)
+    .eq("page_number", 1)
+    .maybeSingle();
+  if (pageError) {
     return Response.json({ error: "Could not load story content" }, { status: 500 });
   }
 
   const profile = Array.isArray(story.profiles) ? story.profiles[0] : story.profiles;
   const shareLink = new URL(`/?story=${encodeURIComponent(story.id)}`, request.url).toString();
+  const firstPageContent = firstPage?.content?.trim() ?? "";
   return Response.json({
     story: {
       id: story.id,
       title: story.title,
-      content: (pages ?? []).map((page) => page.content).join("\n\n"),
+      content: firstPageContent.length > 300 ? `${firstPageContent.slice(0, 297)}...` : firstPageContent,
       author: profile?.display_name || "Anonymous writer",
+      authorAvatar: profile?.avatar_url ?? null,
       shareLink,
     },
   }, { headers: { "Cache-Control": "no-store" } });
