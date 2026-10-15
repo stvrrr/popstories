@@ -1,11 +1,82 @@
-import { createServerSupabaseClient } from "../../../lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
+import { timingSafeEqual } from "node:crypto";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function isAuthorized(request) {
+  const expected = process.env.BOT_SECRET_TOKEN;
+  const authorization = request.headers.get("authorization");
+  if (!expected || !authorization?.startsWith("Bearer ")) return false;
+
+  const receivedBuffer = Buffer.from(authorization.slice(7));
+  const expectedBuffer = Buffer.from(expected);
+  return receivedBuffer.length === expectedBuffer.length && timingSafeEqual(receivedBuffer, expectedBuffer);
+}
+
+function createAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return null;
+  return createClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+export async function GET(request) {
+  if (!isAuthorized(request)) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return Response.json({ error: "Story polling is not configured" }, { status: 503 });
+  }
+
+  const { data: story, error } = await admin
+    .from("stories")
+    .select("id,title,author_id,profiles!stories_author_id_fkey(display_name)")
+    .eq("status", "published")
+    .eq("visibility", "public")
+    .is("discord_posted_at", null)
+    .order("published_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return Response.json({ error: "Could not load pending stories" }, { status: 500 });
+  }
+  if (!story) {
+    return Response.json({ story: null }, { headers: { "Cache-Control": "no-store" } });
+  }
+
+  const [{ data: pages, error: pagesError }] = await Promise.all([
+    admin
+      .from("story_pages")
+      .select("page_number,content")
+      .eq("story_id", story.id)
+      .order("page_number", { ascending: true }),
+  ]);
+  if (pagesError) {
+    return Response.json({ error: "Could not load story content" }, { status: 500 });
+  }
+
+  const profile = Array.isArray(story.profiles) ? story.profiles[0] : story.profiles;
+  const shareLink = new URL(`/?story=${encodeURIComponent(story.id)}`, request.url).toString();
+  return Response.json({
+    story: {
+      id: story.id,
+      title: story.title,
+      content: (pages ?? []).map((page) => page.content).join("\n\n"),
+      author: profile?.display_name || "Anonymous writer",
+      shareLink,
+    },
+  }, { headers: { "Cache-Control": "no-store" } });
+}
 
 export async function POST(request) {
-  const origin = request.headers.get("origin");
-  if (!origin || origin !== new URL(request.url).origin) {
-    return Response.json({ error: "Invalid request origin" }, { status: 403 });
+  if (!isAuthorized(request)) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   let payload;
@@ -14,78 +85,25 @@ export async function POST(request) {
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-
-  const { title, content, shareLink } = payload ?? {};
-  if (
-    typeof title !== "string" || !title.trim() || title.length > 256 ||
-    typeof content !== "string" || !content.trim() || content.length > 20000 ||
-    typeof shareLink !== "string" || shareLink.length > 2048
-  ) {
-    return Response.json({ error: "Invalid story details" }, { status: 400 });
+  if (typeof payload?.id !== "string" || !payload.id.trim()) {
+    return Response.json({ error: "Story id is required" }, { status: 400 });
   }
 
-  let parsedShareLink;
-  try {
-    parsedShareLink = new URL(shareLink);
-  } catch {
-    return Response.json({ error: "Invalid story link" }, { status: 400 });
-  }
-  if (
-    !["http:", "https:"].includes(parsedShareLink.protocol) ||
-    parsedShareLink.origin !== origin
-  ) {
-    return Response.json({ error: "Story link must be on this website" }, { status: 400 });
+  const admin = createAdminClient();
+  if (!admin) {
+    return Response.json({ error: "Story polling is not configured" }, { status: 503 });
   }
 
-  const botApiUrl = process.env.BOT_API_URL;
-  const secretToken = process.env.BOT_SECRET_TOKEN;
-  if (!botApiUrl || !secretToken) {
-    return Response.json({ error: "Story notifications are not configured" }, { status: 503 });
+  const { error } = await admin
+    .from("stories")
+    .update({ discord_posted_at: new Date().toISOString() })
+    .eq("id", payload.id.trim())
+    .eq("status", "published")
+    .eq("visibility", "public")
+    .is("discord_posted_at", null);
+
+  if (error) {
+    return Response.json({ error: "Could not acknowledge story" }, { status: 500 });
   }
-
-  let botEndpoint;
-  try {
-    const baseUrl = new URL(botApiUrl);
-    if (!["http:", "https:"].includes(baseUrl.protocol)) throw new Error("Unsupported protocol");
-    botEndpoint = new URL("/new-story", baseUrl);
-  } catch {
-    return Response.json({ error: "Invalid bot endpoint configuration" }, { status: 503 });
-  }
-
-  try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return Response.json({ error: "Authentication required" }, { status: 401 });
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("display_name")
-      .eq("id", user.id)
-      .maybeSingle();
-    const author = profile?.display_name?.trim() ||
-      user.user_metadata?.display_name || user.user_metadata?.name || user.email || "Anonymous writer";
-
-    const botResponse = await fetch(botEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: title.trim(),
-        content: content.trim(),
-        author,
-        shareLink: parsedShareLink.toString(),
-        secretToken,
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (!botResponse.ok) {
-      return Response.json({ error: "Bot rejected the story notification" }, { status: 502 });
-    }
-    return Response.json({ delivered: true });
-  } catch {
-    return Response.json({ error: "Could not deliver the story notification" }, { status: 502 });
-  }
+  return Response.json({ acknowledged: true });
 }
