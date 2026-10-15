@@ -487,6 +487,18 @@ export default function HomePage() {
       notify(pagesError.message);
       return;
     }
+    const shareLink = new URL(`/?story=${encodeURIComponent(story.id)}`, window.location.origin).toString();
+    void fetch("/api/story", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        title: storyTitle.trim(),
+        content: pages.map((page) => page.trim()).filter(Boolean).join("\n\n"),
+        author: user.user_metadata?.display_name ?? user.email ?? "Anonymous writer",
+        shareLink,
+      }),
+    }).catch(() => undefined);
     setStoryTitle("");
     setStoryDescription("");
     setSelectedGenres([]);
