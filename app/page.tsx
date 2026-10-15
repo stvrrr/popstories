@@ -13,6 +13,7 @@ import {
   Heart,
   Home,
   Leaf,
+  LogOut,
   Menu,
   MoreHorizontal,
   Moon,
@@ -24,6 +25,7 @@ import {
   Share2,
   Sparkles,
   Sun,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -357,6 +359,12 @@ export default function HomePage() {
     await supabase.auth.signOut();
     notify("You have been signed out");
   };
+  const handleAccountDeleted = async () => {
+    const { error } = await supabase.auth.signOut();
+    setUser(null);
+    setView("Discover");
+    notify(error ? `Account deleted, but sign-out failed: ${error.message}` : "Your account has been permanently deleted");
+  };
   const toggleLike = async (story: Story) => {
     if (!user) { setAuthMode("login"); setAuthOpen(true); return; }
     const alreadyLiked = liked.includes(story.id);
@@ -655,7 +663,7 @@ export default function HomePage() {
         {view === "Dashboard" && (
           <Dashboard onWrite={() => setView("Write")} user={user} />
         )}
-        {view === "Profile" && <ProfileView user={user} onSignOut={handleSignOut} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
+        {view === "Profile" && <ProfileView user={user} onSignOut={handleSignOut} onDeleted={handleAccountDeleted} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
         {view === "PublicProfile" && publicProfileUsername && (
           <PublicProfile
             username={publicProfileUsername}
@@ -1120,12 +1128,16 @@ function FollowDirectory({ user, profileId, counts, onAuthor }: { user: User | n
   );
 }
 
-function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOut: () => Promise<void>; onSaved: () => Promise<void> }) {
+function ProfileView({ user, onSignOut, onDeleted, onSaved }: { user: User | null; onSignOut: () => Promise<void>; onDeleted: () => Promise<void>; onSaved: () => Promise<void> }) {
   const [profile, setProfile] = useState<Profile>({ username: "", display_name: "", bio: "", avatar_url: "", profile_links: [] });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
   useEffect(() => {
     if (!user) { setLoading(false); return; }
     supabase.from("profiles").select("username,display_name,bio,avatar_url,profile_links").eq("id", user.id).maybeSingle().then(({ data }: { data: Profile | null }) => {
@@ -1133,6 +1145,17 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
       setLoading(false);
     });
   }, [user]);
+  useEffect(() => {
+    if (!deleteDialogOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || deleting) return;
+      setDeleteDialogOpen(false);
+      setDeletePassword("");
+      setDeleteError("");
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [deleteDialogOpen, deleting]);
   if (!user) return <section className="content-wrap empty-feed"><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Sign in to edit your <em>profile.</em></h1><p className="subtitle">Create an account to choose your name and share stories.</p></section>;
   const saveProfile = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true); setMessage("");
@@ -1164,13 +1187,125 @@ function ProfileView({ user, onSignOut, onSaved }: { user: User | null; onSignOu
     }
     setProfile({ ...profile, avatar_url: avatarUrl, profile_links: profileLinks }); setAvatarFile(null); await onSaved();
   };
-  return <section className="content-wrap profile-wrap"><div className="page-heading"><div><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Make it <em>yours.</em></h1><p className="subtitle">This is how readers will know you.</p></div><button className="sign-out-button" onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}><X size={15} /> Sign out</button></div>{loading ? <p className="subtitle">Loading profile...</p> : <form className="profile-form" onSubmit={saveProfile}><div className="profile-preview">{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}<div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div></div><label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label><label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label><label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label><label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>{Array.from({ length: PROFILE_LINK_LIMIT }, (_, index) => (
-        <label key={`profile-link-${index}`}>Profile link {index + 1} <small>{index === 0 ? "Optional" : "Optional"}</small><input value={profile.profile_links[index] ?? ""} onChange={(event) => setProfile((current) => {
-          const nextLinks = Array.from({ length: PROFILE_LINK_LIMIT }, (_, nextIndex) => current.profile_links[nextIndex] ?? "");
-          nextLinks[index] = event.target.value;
-          return { ...current, profile_links: nextLinks };
-        })} placeholder="https://your-site.com" /></label>
-      ))}<p className="profile-hint">Up to 3 links, no NSFW or 18+ content.</p>{message && <p className="profile-error">{message}</p>}<button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button></form>}</section>;
+  const deleteAccount = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setDeleting(true);
+    setDeleteError("");
+
+    try {
+      const response = await fetch("/api/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) {
+        setDeleteError(result.error ?? "Account deletion failed. Please try again.");
+        setDeleting(false);
+        return;
+      }
+
+      setDeleting(false);
+      await onDeleted();
+    } catch (error) {
+      setDeleting(false);
+      setDeleteError(error instanceof Error ? error.message : "Account deletion failed. Please try again.");
+    }
+  };
+  const closeDeleteDialog = () => {
+    if (deleting) return;
+    setDeleteDialogOpen(false);
+    setDeletePassword("");
+    setDeleteError("");
+  };
+
+  return (
+    <section className="content-wrap profile-wrap">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow"><Users size={14} /> Your profile</p>
+          <h1>Make it <em>yours.</em></h1>
+          <p className="subtitle">This is how readers will know you.</p>
+        </div>
+        <button
+          className="sign-out-button"
+          type="button"
+          onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}
+        >
+          <span className="sign-out-icon"><LogOut size={17} /></span>
+          <span className="sign-out-label"><strong>Sign out</strong><small>End your session</small></span>
+        </button>
+      </div>
+      {loading ? <p className="subtitle">Loading profile...</p> : (
+        <>
+          <form className="profile-form" onSubmit={saveProfile}>
+            <div className="profile-preview">
+              {profile.avatar_url
+                ? <img src={profile.avatar_url} alt="Profile avatar" />
+                : <div className="avatar avatar-plum avatar-large">{(profile.display_name || user.email || "U").slice(0, 2).toUpperCase()}</div>}
+              <div><strong>{profile.display_name || "Your name"}</strong><span>@{profile.username || "username"}</span></div>
+            </div>
+            <label>Profile photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)} /></label>
+            <label>Display name<input value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} required placeholder="Your name" /></label>
+            <label>Username <small>Must be unique</small><input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} required minLength={3} placeholder="yourhandle" /></label>
+            <label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} maxLength={160} placeholder="A sentence about you" /></label>
+            {Array.from({ length: PROFILE_LINK_LIMIT }, (_, index) => (
+              <label key={`profile-link-${index}`}>Profile link {index + 1} <small>Optional</small><input value={profile.profile_links[index] ?? ""} onChange={(event) => setProfile((current) => {
+                const nextLinks = Array.from({ length: PROFILE_LINK_LIMIT }, (_, nextIndex) => current.profile_links[nextIndex] ?? "");
+                nextLinks[index] = event.target.value;
+                return { ...current, profile_links: nextLinks };
+              })} placeholder="https://your-site.com" /></label>
+            ))}
+            <p className="profile-hint">Up to 3 links, no NSFW or 18+ content.</p>
+            {message && <p className="profile-error">{message}</p>}
+            <button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button>
+          </form>
+          <section className="account-danger-zone" aria-labelledby="account-danger-title">
+            <div>
+              <h2 id="account-danger-title">Delete account</h2>
+              <p>Permanently remove your account and associated profile data.</p>
+            </div>
+            <button className="delete-account-button" type="button" onClick={() => setDeleteDialogOpen(true)}>
+              <Trash2 size={16} /> Delete account
+            </button>
+          </section>
+        </>
+      )}
+      {deleteDialogOpen && (
+        <div className="modal-backdrop account-delete-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDeleteDialog(); }}>
+          <section className="account-delete-modal" role="dialog" aria-modal="true" aria-labelledby="account-delete-title">
+            <button className="modal-close" type="button" onClick={closeDeleteDialog} disabled={deleting} aria-label="Close">
+              <X size={16} />
+            </button>
+            <span className="account-delete-mark"><Trash2 size={20} /></span>
+            <p className="eyebrow">This cannot be undone</p>
+            <h2 id="account-delete-title">Delete your account?</h2>
+            <p className="account-delete-copy">Your account and associated profile data will be permanently removed. Enter your password to confirm it’s really you.</p>
+            <form className="account-delete-form" onSubmit={deleteAccount}>
+              <label htmlFor="delete-account-password">Account password</label>
+              <input
+                id="delete-account-password"
+                type="password"
+                autoComplete="current-password"
+                autoFocus
+                required
+                value={deletePassword}
+                onChange={(event) => setDeletePassword(event.target.value)}
+                disabled={deleting}
+              />
+              {deleteError && <p className="profile-error" role="alert">{deleteError}</p>}
+              <div className="account-delete-actions">
+                <button className="quiet-button" type="button" onClick={closeDeleteDialog} disabled={deleting}>Keep my account</button>
+                <button className="confirm-delete-button" type="submit" disabled={deleting || !deletePassword}>
+                  <Trash2 size={15} /> {deleting ? "Deleting..." : "Delete permanently"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function PublicProfile({
