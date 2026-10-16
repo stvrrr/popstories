@@ -138,7 +138,12 @@ where comments.user_id <> stories.author_id
 on conflict (event_type, source_id) do nothing;
 
 insert into public.activity_events (event_type, source_id, actor_id, recipient_id, created_at)
-select 'follow', follows.id, follows.follower_id, follows.following_id, follows.created_at
+select
+  'follow',
+  md5(jsonb_build_array('follow', follows.follower_id, follows.following_id, follows.created_at)::text)::uuid,
+  follows.follower_id,
+  follows.following_id,
+  follows.created_at
 from public.follows
 where follows.follower_id <> follows.following_id
 on conflict (event_type, source_id) do nothing;
