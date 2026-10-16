@@ -258,6 +258,7 @@ const navItems = [
   { label: "Following", icon: Users },
   { label: "Dashboard", icon: BarChart3 },
 ];
+type MobileNavigation = "bottom" | "left" | "right";
 const chartData: number[] = [];
 const supabase = createClient();
 const ADMIN_USER_ID = "b3cf6d3d-3f8c-43f1-92b6-b07b115accde";
@@ -265,6 +266,7 @@ const ADMIN_USER_ID = "b3cf6d3d-3f8c-43f1-92b6-b07b115accde";
 export default function HomePage() {
   const [view, setView] = useState("Discover");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [mobileNavigation, setMobileNavigation] = useState<MobileNavigation>("left");
   const [themePreferenceLoaded, setThemePreferenceLoaded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [readingStory, setReadingStory] = useState<Story | null>(null);
@@ -295,8 +297,12 @@ export default function HomePage() {
     try {
       const storedTheme = window.localStorage.getItem("popstories-theme");
       if (storedTheme === "light" || storedTheme === "dark") setTheme(storedTheme);
+      const storedNavigation = window.localStorage.getItem("popstories-mobile-navigation");
+      if (storedNavigation === "bottom" || storedNavigation === "left" || storedNavigation === "right") {
+        setMobileNavigation(storedNavigation);
+      }
     } catch (error) {
-      console.error("Could not read the saved theme preference.", error);
+      console.error("Could not read saved display preferences.", error);
     }
     setThemePreferenceLoaded(true);
   }, []);
@@ -308,6 +314,14 @@ export default function HomePage() {
       console.error("Could not save the theme preference.", error);
     }
   }, [theme, themePreferenceLoaded]);
+  useEffect(() => {
+    if (!themePreferenceLoaded) return;
+    try {
+      window.localStorage.setItem("popstories-mobile-navigation", mobileNavigation);
+    } catch (error) {
+      console.error("Could not save the mobile navigation preference.", error);
+    }
+  }, [mobileNavigation, themePreferenceLoaded]);
   const refreshSavedState = async (userId: string | null) => {
     if (!userId) {
       setSaved([]);
@@ -625,7 +639,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className={`app-shell ${theme === "dark" ? "dark-mode" : ""}`}>
+    <div className={`app-shell ${theme === "dark" ? "dark-mode" : ""} navigation-${mobileNavigation}`}>
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="brand-lockup">
           <div className="brand-mark">
@@ -640,7 +654,7 @@ export default function HomePage() {
             <X size={18} />
           </button>
         </div>
-        <button className="profile-mini" onClick={() => setView("Settings")}>
+        <button className="profile-mini" onClick={() => { setView("Settings"); setMenuOpen(false); }}>
           <div className="avatar avatar-plum">
             {user ? (user.email?.[0] ?? "U").toUpperCase() : "NS"}
           </div>
@@ -715,6 +729,7 @@ export default function HomePage() {
             className="mobile-menu"
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label="Toggle menu"
+            aria-expanded={menuOpen}
           >
             <Menu size={21} />
           </button>
@@ -771,7 +786,7 @@ export default function HomePage() {
         {view === "Dashboard" && (
           <Dashboard onWrite={() => setView("Write")} user={user} />
         )}
-        {view === "Settings" && <SettingsView user={user} theme={theme} setTheme={setTheme} onSignOut={handleSignOut} onDeleted={handleAccountDeleted} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
+        {view === "Settings" && <SettingsView user={user} theme={theme} setTheme={setTheme} mobileNavigation={mobileNavigation} setMobileNavigation={setMobileNavigation} onSignOut={handleSignOut} onDeleted={handleAccountDeleted} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
         {view === "PublicProfile" && publicProfileUsername && (
           <PublicProfile
             username={publicProfileUsername}
@@ -833,6 +848,31 @@ export default function HomePage() {
           />
         )}
       </main>
+      <nav className="mobile-bottom-nav" aria-label="Bottom navigation">
+        {[
+          { label: "Discover", icon: Home, view: "Discover" },
+          { label: "Following", icon: Users, view: "Following" },
+          { label: "Dashboard", icon: BarChart3, view: "Dashboard" },
+          { label: "Write", icon: PenLine, view: "Write" },
+          { label: "My shelf", icon: Bookmark, view: "Shelf" },
+          { label: "Settings", icon: Settings2, view: "Settings" },
+          ...(user?.id === ADMIN_USER_ID ? [{ label: "Admin", icon: BarChart3, view: "Admin" }] : []),
+        ].map(({ label, icon: Icon, view: targetView }) => {
+          return (
+            <button
+              type="button"
+              key={label}
+              className={view === targetView ? "active" : ""}
+              aria-current={view === targetView ? "page" : undefined}
+              onClick={() => { setView(targetView); setMenuOpen(false); }}
+            >
+              <Icon size={18} />
+              <span>{label}</span>
+              {label === "Following" && <small>{following.length}</small>}
+            </button>
+          );
+        })}
+      </nav>
       {readingStory && (
         <ReaderModal
           story={readingStory}
@@ -1238,7 +1278,7 @@ function FollowDirectory({ user, profileId, counts, onAuthor }: { user: User | n
   );
 }
 
-function SettingsView({ user, theme, setTheme, onSignOut, onDeleted, onSaved }: { user: User | null; theme: "light" | "dark"; setTheme: (theme: "light" | "dark") => void; onSignOut: () => Promise<void>; onDeleted: () => Promise<void>; onSaved: () => Promise<void> }) {
+function SettingsView({ user, theme, setTheme, mobileNavigation, setMobileNavigation, onSignOut, onDeleted, onSaved }: { user: User | null; theme: "light" | "dark"; setTheme: (theme: "light" | "dark") => void; mobileNavigation: MobileNavigation; setMobileNavigation: (navigation: MobileNavigation) => void; onSignOut: () => Promise<void>; onDeleted: () => Promise<void>; onSaved: () => Promise<void> }) {
   const [section, setSection] = useState<"general" | "profile">("general");
   const [profile, setProfile] = useState<Profile>({ username: "", display_name: "", bio: "", avatar_url: "", profile_links: [] });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -1366,7 +1406,7 @@ function SettingsView({ user, theme, setTheme, onSignOut, onDeleted, onSaved }: 
         <section className="settings-section" role="tabpanel" aria-label="General settings">
           <div className="settings-section-heading">
             <div><span className="section-kicker">Preferences</span><h2>General</h2></div>
-            <p>Choose how the reading room looks on this device.</p>
+            <p>Choose how the reading room looks and works on this device.</p>
           </div>
           <div className="settings-option">
             <span className="settings-option-icon">{theme === "dark" ? <Moon size={18} /> : <Sun size={18} />}</span>
@@ -1377,6 +1417,21 @@ function SettingsView({ user, theme, setTheme, onSignOut, onDeleted, onSaved }: 
               </button>
               <button type="button" className={theme === "dark" ? "selected" : ""} aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>
                 <Moon size={15} /> Dark
+              </button>
+            </span>
+          </div>
+          <div className="settings-option settings-navigation-option">
+            <span className="settings-option-icon"><Menu size={18} /></span>
+            <span className="settings-option-copy"><strong>Mobile navigation</strong><small>Choose how to open the menu on smaller screens.</small></span>
+            <span className="navigation-choice" role="group" aria-label="Mobile navigation style">
+              <button type="button" className={mobileNavigation === "bottom" ? "selected" : ""} aria-pressed={mobileNavigation === "bottom"} onClick={() => setMobileNavigation("bottom")}>
+                <ChevronDown size={15} /> Bottom bar
+              </button>
+              <button type="button" className={mobileNavigation === "left" ? "selected" : ""} aria-pressed={mobileNavigation === "left"} onClick={() => setMobileNavigation("left")}>
+                <ChevronLeft size={15} /> Left
+              </button>
+              <button type="button" className={mobileNavigation === "right" ? "selected" : ""} aria-pressed={mobileNavigation === "right"} onClick={() => setMobileNavigation("right")}>
+                <ChevronRight size={15} /> Right
               </button>
             </span>
           </div>
