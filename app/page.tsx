@@ -2426,6 +2426,27 @@ function Writer({
     rememberSelection();
     updatePage(sanitizeStoryMarkup(editor.innerHTML));
   };
+  const applyQuotationMarks = () => {
+    const editor = storyEditorRef.current;
+    const selection = window.getSelection();
+    const range = savedRangeRef.current;
+    if (!editor || !range || !editor.contains(range.commonAncestorContainer) || range.collapsed) {
+      notify("Select text in your story first to add quotation marks.");
+      return;
+    }
+
+    const quotedContent = range.extractContents();
+    const quotedText = document.createElement("span");
+    quotedText.append(document.createTextNode("“"), quotedContent, document.createTextNode("”"));
+    range.insertNode(quotedText);
+
+    const quoteRange = document.createRange();
+    quoteRange.selectNodeContents(quotedText);
+    selection?.removeAllRanges();
+    selection?.addRange(quoteRange);
+    savedRangeRef.current = quoteRange.cloneRange();
+    updatePage(sanitizeStoryMarkup(editor.innerHTML));
+  };
   useEffect(() => {
     const editor = storyEditorRef.current;
     if (editor) {
@@ -2496,6 +2517,9 @@ function Writer({
                 </optgroup>
               </select>
             </label>
+            <button type="button" className="quote-tool" aria-label="Add curly quotation marks" title="Wrap selected text in curly quotation marks" onMouseDown={rememberSelection} onClick={applyQuotationMarks}>
+              “ ”
+            </button>
             <button type="button" aria-label="Bold" title="Bold" onMouseDown={rememberSelection} onClick={() => applyInlineFormat("bold")}>
               <span className="tool-bold">B</span>
             </button>

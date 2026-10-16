@@ -259,6 +259,7 @@
 .pin-badge { display:inline-flex; align-items:center; gap:4px; margin-left:auto; padding:4px 7px; border-radius:5px; background:var(--sage-soft); color:var(--sage); font-size:9px; font-weight:700; }
 .reader-author-profile { flex:1; min-width:0; }
 .writing-tools .font-picker { display:block; margin:0; }
+.writing-tools .quote-tool { width:34px; font-family:"Libre Baskerville",serif; font-size:16px; font-weight:700; letter-spacing:-.08em; }
 .font-picker select { max-width:175px; padding:6px 25px 6px 9px; border:1px solid var(--line); border-radius:6px; outline:0; background:var(--raised); color:var(--ink); font-size:10px; }
 .font-picker select:focus-visible { outline:2px solid var(--sage); outline-offset:2px; }
 .story-rich-editor { overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
