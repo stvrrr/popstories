@@ -23,6 +23,29 @@ function createAdminClient() {
   });
 }
 
+function toPlainText(content) {
+  return content
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/(?:div|p|li|h[1-6])\s*>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, value) => {
+      const codePoint = Number(value);
+      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "\uFFFD";
+    })
+    .replace(/&#x([\da-f]+);/gi, (_, value) => {
+      const codePoint = Number.parseInt(value, 16);
+      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "\uFFFD";
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function GET(request) {
   if (!isAuthorized(request)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -62,7 +85,7 @@ export async function GET(request) {
 
   const profile = Array.isArray(story.profiles) ? story.profiles[0] : story.profiles;
   const shareLink = new URL(`/?story=${encodeURIComponent(story.id)}`, request.url).toString();
-  const firstPageContent = firstPage?.content?.trim() ?? "";
+  const firstPageContent = toPlainText(firstPage?.content ?? "");
   return Response.json({
     story: {
       id: story.id,
