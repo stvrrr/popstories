@@ -40,7 +40,7 @@ declare
   detail text;
   occurred_at timestamptz;
 begin
-  source_id := (row_data ->> 'id')::uuid;
+  source_id := nullif(row_data ->> 'id', '')::uuid;
   occurred_at := coalesce((row_data ->> 'created_at')::timestamptz, now());
 
   if tg_table_name = 'follows' then
@@ -66,6 +66,11 @@ begin
   if action_type is null or actor_id is null or recipient_id is null or actor_id = recipient_id then
     return new;
   end if;
+
+  source_id := coalesce(
+    source_id,
+    md5(jsonb_build_array(action_type, actor_id, recipient_id, story_id, detail, occurred_at)::text)::uuid
+  );
 
   insert into public.activity_events (
     event_type, source_id, actor_id, recipient_id, story_id, detail, created_at
@@ -100,14 +105,26 @@ after insert on public.follows
 for each row execute function public.capture_activity_event();
 
 insert into public.activity_events (event_type, source_id, actor_id, recipient_id, story_id, created_at)
-select 'like', likes.id, likes.user_id, stories.author_id, likes.story_id, likes.created_at
+select
+  'like',
+  md5(jsonb_build_array('like', likes.user_id, stories.author_id, likes.story_id, null, likes.created_at)::text)::uuid,
+  likes.user_id,
+  stories.author_id,
+  likes.story_id,
+  likes.created_at
 from public.likes
 join public.stories on stories.id = likes.story_id
 where likes.user_id <> stories.author_id
 on conflict (event_type, source_id) do nothing;
 
 insert into public.activity_events (event_type, source_id, actor_id, recipient_id, story_id, created_at)
-select 'favorite', favorites.id, favorites.user_id, stories.author_id, favorites.story_id, favorites.created_at
+select
+  'favorite',
+  md5(jsonb_build_array('favorite', favorites.user_id, stories.author_id, favorites.story_id, null, favorites.created_at)::text)::uuid,
+  favorites.user_id,
+  stories.author_id,
+  favorites.story_id,
+  favorites.created_at
 from public.favorites
 join public.stories on stories.id = favorites.story_id
 where favorites.user_id <> stories.author_id
