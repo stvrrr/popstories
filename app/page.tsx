@@ -2586,23 +2586,34 @@ function Writer({
   const applyQuotationMarks = () => {
     const editor = storyEditorRef.current;
     const selection = window.getSelection();
-    const range = savedRangeRef.current;
-    if (!editor || !range || !editor.contains(range.commonAncestorContainer) || range.collapsed) {
-      notify("Select text in your story first to add quotation marks.");
-      return;
-    }
+    if (!editor) return;
 
+    let range = savedRangeRef.current;
+    if (!range || !editor.contains(range.commonAncestorContainer)) {
+      range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    }
+    const hasSelection = !range.collapsed;
     const quotedContent = range.extractContents();
     const quotedText = document.createElement("span");
-    quotedText.append(document.createTextNode("“"), quotedContent, document.createTextNode("”"));
+    const openingQuote = document.createTextNode("“");
+    quotedText.append(openingQuote, quotedContent, document.createTextNode("”"));
     range.insertNode(quotedText);
 
     const quoteRange = document.createRange();
-    quoteRange.selectNodeContents(quotedText);
+    if (hasSelection) {
+      quoteRange.selectNodeContents(quotedText);
+    } else {
+      quoteRange.setStart(openingQuote, openingQuote.length);
+      quoteRange.collapse(true);
+    }
+    editor.focus();
     selection?.removeAllRanges();
     selection?.addRange(quoteRange);
     savedRangeRef.current = quoteRange.cloneRange();
     updatePage(sanitizeStoryMarkup(editor.innerHTML));
+    setStoryCharacterCount(editor.innerText.length);
   };
   useEffect(() => {
     const editor = storyEditorRef.current;
@@ -2674,7 +2685,7 @@ function Writer({
                 </optgroup>
               </select>
             </label>
-            <button type="button" className="quote-tool" aria-label="Add curly quotation marks" title="Wrap selected text in curly quotation marks" onMouseDown={rememberSelection} onClick={applyQuotationMarks}>
+            <button type="button" className="quote-tool" aria-label="Add curly quotation marks" title="Wrap selected text or insert quotes at the cursor" onMouseDown={rememberSelection} onClick={applyQuotationMarks}>
               “ ”
             </button>
             <button type="button" aria-label="Bold" title="Bold" onMouseDown={rememberSelection} onClick={() => applyInlineFormat("bold")}>
