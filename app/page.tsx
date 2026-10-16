@@ -55,7 +55,15 @@ type Story = {
   pinLabel?: string | null;
 };
 type Profile = { id?: string; username: string; display_name: string; bio: string; avatar_url: string; profile_links: string[] };
-type NotificationItem = { id: string; kind: "like" | "favorite"; actor: string; actorAvatar: string | null; storyTitle: string; createdAt: string };
+type NotificationItem = {
+  id: string;
+  kind: "like" | "favorite" | "comment" | "follow";
+  actor: string;
+  actorAvatar: string | null;
+  storyTitle?: string;
+  detail?: string;
+  createdAt: string;
+};
 const PROFILE_LINK_LIMIT = 3;
 const BLOCKED_PROFILE_LINK_PATTERNS = ["nsfw", "adult", "porn", "xxx", "sex", "18+", "18plus", "onlyfans", "fetish", "lewd", "nude", "erotic"];
 const STORY_FONTS = [
@@ -1601,33 +1609,84 @@ function PublicProfile({
 function NotificationPanel({ user }: { user: User | null }) {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let active = true;
     const load = async () => {
-      if (!user) { setItems([]); setLoading(false); return; }
+      if (!user) {
+        setItems([]);
+        setLoadError("");
+        setLoading(false);
+        return;
+      }
       setLoading(true);
-      const { data: stories } = await supabase.from("stories").select("id,title").eq("author_id", user.id);
-      const storyRows = stories ?? [];
-      if (!storyRows.length) { if (active) { setItems([]); setLoading(false); } return; }
-      const storyIds = storyRows.map((story: { id: string }) => story.id);
-      const titleById = new Map<string, string>(storyRows.map((story: { id: string; title: string }) => [story.id, story.title] as [string, string]));
-      const [{ data: likes }, { data: favorites }] = await Promise.all([
-        supabase.from("likes").select("id,story_id,user_id,created_at").in("story_id", storyIds).order("created_at", { ascending: false }).limit(20),
-        supabase.from("favorites").select("id,story_id,user_id,created_at").in("story_id", storyIds).order("created_at", { ascending: false }).limit(20),
+      setLoadError("");
+      const { data: events, error: eventsError } = await supabase
+        .from("activity_events")
+        .select("id,event_type,actor_id,story_id,detail,created_at")
+        .eq("recipient_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (eventsError) {
+        if (active) {
+          setLoadError(`Could not load notifications: ${eventsError.message}`);
+          setLoading(false);
+        }
+        console.error("Could not load recent notifications.", eventsError);
+        return;
+      }
+
+      const rows = (events ?? []) as {
+        id: string;
+        event_type: NotificationItem["kind"];
+        actor_id: string;
+        story_id: string | null;
+        detail: string | null;
+        created_at: string;
+      }[];
+      const actorIds = [...new Set(rows.map((event) => event.actor_id))];
+      const storyIds = [...new Set(rows.flatMap((event) => event.story_id ? [event.story_id] : []))];
+      const [profilesResult, storiesResult] = await Promise.all([
+        actorIds.length
+          ? supabase.from("profiles").select("id,display_name,avatar_url").in("id", actorIds)
+          : Promise.resolve({ data: [], error: null }),
+        storyIds.length
+          ? supabase.from("stories").select("id,title").in("id", storyIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
-      const rows = [
-        ...(likes ?? []).map((row: { id: string; story_id: string; user_id: string; created_at: string }) => ({ ...row, kind: "like" as const })),
-        ...(favorites ?? []).map((row: { id: string; story_id: string; user_id: string; created_at: string }) => ({ ...row, kind: "favorite" as const })),
-      ].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime()).slice(0, 20);
-      const actorIds = [...new Set(rows.map((row) => row.user_id))];
-      const { data: profiles } = actorIds.length ? await supabase.from("profiles").select("id,display_name,avatar_url").in("id", actorIds) : { data: [] };
-      const profileById = new Map<string, { id: string; display_name: string; avatar_url: string | null }>((profiles ?? []).map((profile: { id: string; display_name: string; avatar_url: string | null }) => [profile.id, profile] as [string, { id: string; display_name: string; avatar_url: string | null }]));
+      const loadFailure = profilesResult.error ?? storiesResult.error;
+      if (loadFailure) {
+        if (active) {
+          setLoadError(`Could not load notifications: ${loadFailure.message}`);
+          setLoading(false);
+        }
+        console.error("Could not load notification details.", loadFailure);
+        return;
+      }
+      const profileById = new Map<string, { id: string; display_name: string; avatar_url: string | null }>(
+        (profilesResult.data ?? []).map((profile: { id: string; display_name: string; avatar_url: string | null }) => [profile.id, profile]),
+      );
+      const titleById = new Map<string, string>(
+        (storiesResult.data ?? []).map((story: { id: string; title: string }) => [story.id, story.title]),
+      );
       if (active) {
-        setItems(rows.flatMap((row) => {
-          const actor = profileById.get(row.user_id);
-          const storyTitle = titleById.get(row.story_id);
-          return actor && storyTitle ? [{ id: `${row.kind}-${row.id}`, kind: row.kind, actor: actor.display_name, actorAvatar: actor.avatar_url, storyTitle, createdAt: row.created_at }] : [];
+        setItems(rows.flatMap((event) => {
+          const actor = profileById.get(event.actor_id);
+          if (!actor) return [];
+          const storyTitle = event.story_id ? titleById.get(event.story_id) : undefined;
+          const comment = event.detail?.trim();
+          return [{
+            id: event.id,
+            kind: event.event_type,
+            actor: actor.display_name,
+            actorAvatar: actor.avatar_url,
+            storyTitle,
+            detail: comment
+              ? comment.length > 140 ? `${comment.slice(0, 137)}...` : comment
+              : undefined,
+            createdAt: event.created_at,
+          }];
         }));
         setLoading(false);
       }
@@ -1636,7 +1695,46 @@ function NotificationPanel({ user }: { user: User | null }) {
     return () => { active = false; };
   }, [user]);
 
-  return <div className="notification-panel"><div className="notification-panel-header"><strong>Notifications</strong><span>{items.length}</span></div>{loading ? <p className="notification-empty">Loading activity...</p> : !user ? <p className="notification-empty">Sign in to see activity.</p> : !items.length ? <p className="notification-empty">No recent likes or favorites.</p> : <div className="notification-list">{items.map((item) => <div className="notification-item" key={item.id}><span className="notification-avatar">{item.actorAvatar ? <img src={item.actorAvatar} alt="" /> : item.actor.slice(0, 2).toUpperCase()}</span><p><strong>{item.actor}</strong> {item.kind === "like" ? "liked" : "favorited"} <em>{item.storyTitle}</em><small>{new Date(item.createdAt).toLocaleString()}</small></p></div>)}</div>}</div>;
+  const descriptions: Record<NotificationItem["kind"], string> = {
+    like: "liked your story",
+    favorite: "favorited your story",
+    comment: "commented on your story",
+    follow: "started following you",
+  };
+
+  return (
+    <div className="notification-panel">
+      <div className="notification-panel-header">
+        <strong>Recent activity</strong>
+        <span>{items.length} / 50</span>
+      </div>
+      {loading ? (
+        <p className="notification-empty">Loading activity...</p>
+      ) : !user ? (
+        <p className="notification-empty">Sign in to see activity.</p>
+      ) : loadError ? (
+        <p className="notification-empty">{loadError}</p>
+      ) : !items.length ? (
+        <p className="notification-empty">No recent likes, comments, favorites, or follows.</p>
+      ) : (
+        <div className="notification-list">
+          {items.map((item) => (
+            <div className="notification-item" key={item.id}>
+              <span className="notification-avatar">
+                {item.actorAvatar ? <img src={item.actorAvatar} alt="" /> : item.actor.slice(0, 2).toUpperCase()}
+              </span>
+              <p>
+                <strong>{item.actor}</strong> {descriptions[item.kind]}
+                {item.storyTitle && <> <em>{item.storyTitle}</em></>}
+                {item.detail && <span className="notification-detail">“{item.detail}”</span>}
+                <small>{new Date(item.createdAt).toLocaleString()}</small>
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 type AdminUser = {

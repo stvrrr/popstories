@@ -249,6 +249,7 @@
 .notification-item p { margin:0; color:var(--muted); font-size:11px; line-height:1.45; }
 .notification-item strong { color:var(--ink); }
 .notification-item em { color:var(--ink); font-style:normal; }
+.notification-detail { display:block; margin-top:3px; color:var(--muted); }
 .notification-item small { display:block; margin-top:4px; color:var(--faint); font-size:9px; }
 .notification-empty { margin:0; padding:24px 17px; color:var(--muted); font-size:11px; }
 .description-field { display:grid; position:relative; gap:7px; margin:0 0 22px; color:var(--muted); font-size:10px; font-weight:600; }
