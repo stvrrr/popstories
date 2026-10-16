@@ -15,6 +15,7 @@ import {
   Leaf,
   LogOut,
   Menu,
+  MessageCircle,
   MoreHorizontal,
   Moon,
   PenLine,
@@ -25,6 +26,7 @@ import {
   Settings2,
   Share2,
   Sparkles,
+  Star,
   Sun,
   Trash2,
   Users,
@@ -845,6 +847,8 @@ export default function HomePage() {
           onAuthor={() => { setReadingStory(null); setPublicProfileUsername(readingStory.handle); setView("PublicProfile"); }}
           onShare={() => void shareStory(readingStory)}
           onViewError={(message) => notify(`View was not recorded: ${message}`)}
+          setAuthMode={setAuthMode}
+          setAuthOpen={setAuthOpen}
         />
       )}
       {authOpen && (
@@ -2701,6 +2705,8 @@ function ReaderModal({
   onAuthor,
   onShare,
   onViewError,
+  setAuthMode,
+  setAuthOpen,
 }: {
   story: Story;
   user: User | null;
@@ -2714,9 +2720,115 @@ function ReaderModal({
   onAuthor: () => void;
   onShare: () => void;
   onViewError: (message: string) => void;
+  setAuthMode: (mode: "login" | "signup") => void;
+  setAuthOpen: (open: boolean) => void;
 }) {
   const [pages, setPages] = useState<string[]>([story.excerpt]);
   const [pageIndex, setPageIndex] = useState(0);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [comments, setComments] = useState<StoryComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsError, setCommentsError] = useState("");
+  const [commentText, setCommentText] = useState("");
+  const [commentRating, setCommentRating] = useState(0);
+  const [postingComment, setPostingComment] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
+
+  const loadComments = async () => {
+    setCommentsLoading(true);
+    setCommentsError("");
+    const [{ data, error }, { count, error: countError }] = await Promise.all([
+      supabase
+        .from("story_comments")
+        .select("id,content,rating,created_at,user_id,profiles!story_comments_user_id_fkey(display_name,username,avatar_url)")
+        .eq("story_id", story.id)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("story_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("story_id", story.id),
+    ]);
+    if (error || countError) {
+      setCommentsError(error?.message ?? countError?.message ?? "Comments could not be loaded.");
+      setCommentsLoading(false);
+      return;
+    }
+    setComments((data ?? []).map((row: any) => {
+      const author = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      return {
+        id: row.id,
+        content: row.content,
+        rating: row.rating,
+        createdAt: row.created_at,
+        userId: row.user_id,
+        author: author?.display_name || "Reader",
+        username: author?.username || "",
+        avatarUrl: author?.avatar_url ?? null,
+      } satisfies StoryComment;
+    }));
+    setCommentCount(count ?? 0);
+    setCommentsLoading(false);
+  };
+
+  useEffect(() => {
+    let active = true;
+    const loadCount = async () => {
+      const { count, error } = await supabase
+        .from("story_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("story_id", story.id);
+      if (!active) return;
+      if (error) setCommentsError(error.message);
+      else setCommentCount(count ?? 0);
+    };
+    void loadCount();
+    return () => { active = false; };
+  }, [story.id]);
+
+  const submitComment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) {
+      setAuthMode("login");
+      setAuthOpen(true);
+      return;
+    }
+    const content = commentText.trim();
+    if (!content) return;
+    setPostingComment(true);
+    setCommentsError("");
+    const { error } = await supabase.from("story_comments").insert({
+      story_id: story.id,
+      user_id: user.id,
+      content,
+      rating: commentRating || null,
+    });
+    if (error) {
+      setCommentsError(error.message);
+      setPostingComment(false);
+      return;
+    }
+    setCommentText("");
+    setCommentRating(0);
+    setPostingComment(false);
+    await loadComments();
+  };
+
+  const deleteComment = async (commentId: string) => {
+    const { error } = await supabase.from("story_comments").delete().eq("id", commentId);
+    if (error) {
+      setCommentsError(error.message);
+      return;
+    }
+    setComments((current) => current.filter((comment) => comment.id !== commentId));
+    setCommentCount((current) => Math.max(0, current - 1));
+  };
+
+  const toggleComments = () => {
+    const nextOpen = !commentsOpen;
+    setCommentsOpen(nextOpen);
+    if (nextOpen && !comments.length && !commentsLoading) void loadComments();
+  };
   useEffect(() => {
     let active = true;
     supabase.from("story_pages").select("page_number,content").eq("story_id", story.id).order("page_number", { ascending: true }).then(({ data }: { data: Array<{ page_number: number; content: string }> | null }) => {
@@ -2776,15 +2888,109 @@ function ReaderModal({
               <Heart size={17} fill={liked ? "currentColor" : "none"} />{" "}
               {liked ? "Liked" : "Like story"}
             </button>
+            <button type="button" onClick={toggleComments} aria-expanded={commentsOpen}>
+              <MessageCircle size={16} /> Comments ({commentCount})
+            </button>
             <button onClick={onShare}>
               <Share2 size={17} /> Share
             </button>
           </div>
+          {commentsOpen && (
+            <section className="story-comments" aria-label="Story comments">
+              <div className="story-comments-heading">
+                <div><span className="section-kicker">The conversation</span><h3>Comments</h3></div>
+                <span>{commentCount} {commentCount === 1 ? "comment" : "comments"}</span>
+              </div>
+              <form className="story-comment-form" onSubmit={submitComment}>
+                {user ? (
+                  <>
+                    <label htmlFor="story-comment-text">Add your thoughts</label>
+                    <textarea
+                      id="story-comment-text"
+                      value={commentText}
+                      onChange={(event) => setCommentText(event.target.value)}
+                      maxLength={1000}
+                      required
+                      placeholder="Share a thoughtful comment..."
+                    />
+                    <div className="comment-form-footer">
+                      <div className="comment-rating">
+                        <span>Rate this story <small>(optional)</small></span>
+                        <div role="group" aria-label="Rate this story from 1 to 5 stars">
+                          {Array.from({ length: 5 }, (_, index) => {
+                            const rating = index + 1;
+                            return (
+                              <button
+                                key={rating}
+                                type="button"
+                                aria-label={`${rating} star${rating === 1 ? "" : "s"}`}
+                                aria-pressed={commentRating === rating}
+                                className={rating <= commentRating ? "selected" : ""}
+                                onClick={() => setCommentRating(rating)}
+                              >
+                                <Star size={17} fill={rating <= commentRating ? "currentColor" : "none"} />
+                              </button>
+                            );
+                          })}
+                          {commentRating > 0 && <button className="clear-rating" type="button" onClick={() => setCommentRating(0)}>Clear</button>}
+                        </div>
+                      </div>
+                      <button className="comment-submit" type="submit" disabled={postingComment || !commentText.trim()}>
+                        <Send size={14} /> {postingComment ? "Posting..." : "Post comment"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="comment-sign-in">
+                    <span>Sign in to join the conversation and rate this story.</span>
+                    <button type="button" onClick={() => { setAuthMode("login"); setAuthOpen(true); }}>Sign in</button>
+                  </div>
+                )}
+              </form>
+              {commentsError && <p className="comment-error" role="alert">{commentsError}</p>}
+              {commentsLoading ? <p className="comments-empty">Loading comments...</p> : comments.length ? (
+                <div className="story-comment-list">
+                  {comments.map((comment) => (
+                    <article className="story-comment" key={comment.id}>
+                      <div className="comment-avatar">
+                        {comment.avatarUrl ? <img src={comment.avatarUrl} alt="" /> : comment.author.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="story-comment-content">
+                        <div className="story-comment-meta">
+                          <span><strong>{comment.author}</strong>{comment.username && <small>@{comment.username}</small>}</span>
+                          <time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleDateString()}</time>
+                        </div>
+                        {comment.rating && <div className="comment-stars" aria-label={`${comment.rating} out of 5 stars`}>
+                          {Array.from({ length: 5 }, (_, index) => <Star key={index} size={13} fill={index < comment.rating! ? "currentColor" : "none"} />)}
+                        </div>}
+                        <p>{comment.content}</p>
+                        {user && (user.id === comment.userId || user.id === story.authorId) && (
+                          <button className="comment-delete" type="button" onClick={() => void deleteComment(comment.id)}>Delete</button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : !commentsError && <p className="comments-empty">No comments yet. Start the conversation.</p>}
+              {commentCount > comments.length && <p className="comments-empty">Showing the latest {comments.length} of {commentCount} comments.</p>}
+            </section>
+          )}
         </div>
       </article>
     </div>
   );
 }
+
+type StoryComment = {
+  id: string;
+  content: string;
+  rating: number | null;
+  createdAt: string;
+  userId: string;
+  author: string;
+  username: string;
+  avatarUrl: string | null;
+};
 
 function AuthModal({
   mode,
