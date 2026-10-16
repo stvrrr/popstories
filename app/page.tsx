@@ -263,6 +263,7 @@ const ADMIN_USER_ID = "b3cf6d3d-3f8c-43f1-92b6-b07b115accde";
 export default function HomePage() {
   const [view, setView] = useState("Discover");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [themePreferenceLoaded, setThemePreferenceLoaded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [readingStory, setReadingStory] = useState<Story | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
@@ -288,6 +289,23 @@ export default function HomePage() {
   const [authLoading, setAuthLoading] = useState(false);
   const [siteImageUrl, setSiteImageUrl] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const storedTheme = window.localStorage.getItem("popstories-theme");
+      if (storedTheme === "light" || storedTheme === "dark") setTheme(storedTheme);
+    } catch (error) {
+      console.error("Could not read the saved theme preference.", error);
+    }
+    setThemePreferenceLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (!themePreferenceLoaded) return;
+    try {
+      window.localStorage.setItem("popstories-theme", theme);
+    } catch (error) {
+      console.error("Could not save the theme preference.", error);
+    }
+  }, [theme, themePreferenceLoaded]);
   const refreshSavedState = async (userId: string | null) => {
     if (!userId) {
       setSaved([]);
