@@ -30,7 +30,7 @@ import {
   X,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 
 type Story = {
@@ -55,6 +55,16 @@ type Profile = { id?: string; username: string; display_name: string; bio: strin
 type NotificationItem = { id: string; kind: "like" | "favorite"; actor: string; actorAvatar: string | null; storyTitle: string; createdAt: string };
 const PROFILE_LINK_LIMIT = 3;
 const BLOCKED_PROFILE_LINK_PATTERNS = ["nsfw", "adult", "porn", "xxx", "sex", "18+", "18plus", "onlyfans", "fetish", "lewd", "nude", "erotic"];
+const STORY_FONTS = [
+  "Inter", "Roboto", "Open Sans", "Lato", "Montserrat", "Poppins", "Nunito", "Raleway",
+  "Ubuntu", "Merriweather", "Lora", "Playfair Display", "Source Sans 3", "Oswald",
+  "PT Sans", "PT Serif", "Roboto Slab", "Crimson Text", "Libre Baskerville",
+  "Cormorant Garamond", "EB Garamond", "Fira Sans", "Fira Code", "Inconsolata",
+  "Quicksand", "Rubik", "Work Sans", "DM Sans", "DM Serif Display", "Josefin Sans",
+  "Karla", "Manrope", "Mulish", "Cabin", "Arvo", "Bitter", "Barlow", "Archivo",
+  "Anton", "Bebas Neue", "Pacifico", "Dancing Script", "Great Vibes", "Caveat",
+  "Lobster", "Abril Fatface", "Cinzel", "Righteous",
+];
 
 function normalizeProfileLinks(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -63,6 +73,93 @@ function normalizeProfileLinks(value: unknown): string[] {
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, PROFILE_LINK_LIMIT);
+}
+
+function loadStoryFont(font: string) {
+  if (typeof document === "undefined" || !STORY_FONTS.includes(font)) return;
+  const id = `story-font-${font.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  if (document.getElementById(id)) return;
+  const link = document.createElement("link");
+  link.id = id;
+  link.rel = "stylesheet";
+  const params = new URLSearchParams({ family: font, display: "swap" });
+  link.href = `https://fonts.googleapis.com/css2?${params.toString()}`;
+  document.head.append(link);
+}
+
+function sanitizeStoryMarkup(markup: string): string {
+  const parsed = new DOMParser().parseFromString(markup, "text/html");
+  const output = document.createElement("div");
+  const allowedTags = new Set(["DIV", "P", "SPAN", "STRONG", "B", "EM", "I", "BR"]);
+  const blockedTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "SVG", "MATH"]);
+
+  const copyNode = (node: Node, parent: HTMLElement) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      parent.append(document.createTextNode(node.textContent ?? ""));
+      return;
+    }
+    if (!(node instanceof HTMLElement)) return;
+    if (blockedTags.has(node.tagName)) return;
+    if (!allowedTags.has(node.tagName)) {
+      node.childNodes.forEach((child) => copyNode(child, parent));
+      return;
+    }
+
+    const clean = document.createElement(node.tagName.toLowerCase());
+    if (node.tagName === "SPAN") {
+      const font = node.style.fontFamily.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "");
+      if (font && STORY_FONTS.includes(font)) {
+        clean.style.fontFamily = `"${font}"`;
+        loadStoryFont(font);
+      }
+    }
+    node.childNodes.forEach((child) => copyNode(child, clean));
+    parent.append(clean);
+  };
+
+  parsed.body.childNodes.forEach((node) => copyNode(node, output));
+  return output.innerHTML;
+}
+
+function prepareStoryEditorContent(content: string): string {
+  if (/<(?:div|p|span|strong|b|em|i|br)\b/i.test(content)) {
+    return sanitizeStoryMarkup(content);
+  }
+  const escaped = content
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/\n/g, "<br>");
+  return sanitizeStoryMarkup(escaped);
+}
+
+function storyMarkupToReact(markup: string): React.ReactNode[] {
+  const parsed = new DOMParser().parseFromString(sanitizeStoryMarkup(markup), "text/html");
+  const renderNode = (node: Node, key: string): React.ReactNode => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (!(node instanceof HTMLElement)) return null;
+    if (node.tagName === "BR") return <br key={key} />;
+
+    const children = Array.from(node.childNodes).map((child, index) =>
+      renderNode(child, `${key}-${index}`),
+    );
+    if (node.tagName === "STRONG" || node.tagName === "B") return <strong key={key}>{children}</strong>;
+    if (node.tagName === "EM" || node.tagName === "I") return <em key={key}>{children}</em>;
+    if (node.tagName === "P" || node.tagName === "DIV") return <p key={key}>{children}</p>;
+    if (node.tagName === "SPAN") {
+      const font = node.style.fontFamily.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "");
+      const style = font && STORY_FONTS.includes(font) ? { fontFamily: `"${font}"` } : undefined;
+      if (font && STORY_FONTS.includes(font)) loadStoryFont(font);
+      return <span key={key} style={style}>{children}</span>;
+    }
+    return <Fragment key={key}>{children}</Fragment>;
+  };
+
+  return Array.from(parsed.body.childNodes).map((node, index) =>
+    renderNode(node, `story-${index}`),
+  );
 }
 
 function sanitizeProfileLinks(linkValues: string[]) {
@@ -102,7 +199,7 @@ function sanitizeProfileLinks(linkValues: string[]) {
 }
 
 function getReadTime(text: string) {
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const words = text.replace(/<[^>]*>/g, " ").trim().split(/\s+/).filter(Boolean).length;
   return `${Math.max(1, Math.ceil(words / 200))} min read`;
 }
 
@@ -393,7 +490,7 @@ export default function HomePage() {
   };
   const updatePage = (value: string) => {
     const next = [...pages];
-    next[activePage] = value.slice(0, PAGE_LIMIT);
+    next[activePage] = value;
     setPages(next);
   };
   const addPage = () => {
@@ -691,7 +788,7 @@ export default function HomePage() {
             setStoryDescription(story.excerpt ?? "");
             setSelectedGenres(story.category ? story.category.split(", ").filter((genre: string) => GENRES.includes(genre)).slice(0, 3) : []);
             setStoryVisibility(story.visibility ?? "public");
-            setPages(pageRows?.map((page: { content: string }) => page.content.slice(0, PAGE_LIMIT)) ?? [""]);
+            setPages(pageRows?.map((page: { content: string }) => page.content) ?? [""]);
             setActivePage(0);
             setView("Write");
           }} onDelete={async (storyId) => {
@@ -2197,21 +2294,97 @@ function Writer({
   onPublish: () => Promise<void>;
   editing: boolean;
 }) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const storyEditorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
   const [genreMenuOpen, setGenreMenuOpen] = useState(false);
-  const wrapSelection = (before: string, after: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const value = pages[activePage];
-    updatePage(`${value.slice(0, start)}${before}${value.slice(start, end)}${after}${value.slice(end)}`);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + before.length, end + before.length);
-    });
+  const [selectedFont, setSelectedFont] = useState("Libre Baskerville");
+  const [storyCharacterCount, setStoryCharacterCount] = useState(0);
+  const rememberSelection = () => {
+    const editor = storyEditorRef.current;
+    const selection = window.getSelection();
+    if (editor && selection?.rangeCount && editor.contains(selection.anchorNode)) {
+      savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+    }
   };
+  const applyFont = (font: string) => {
+    const editor = storyEditorRef.current;
+    const selection = window.getSelection();
+    const range = savedRangeRef.current;
+    if (!editor || !range || !editor.contains(range.commonAncestorContainer) || range.collapsed) {
+      notify("Select text in your story first to change its font.");
+      return;
+    }
+
+    loadStoryFont(font);
+    const startRange = document.createRange();
+    startRange.selectNodeContents(editor);
+    startRange.setEnd(range.startContainer, range.startOffset);
+    const endRange = document.createRange();
+    endRange.selectNodeContents(editor);
+    endRange.setEnd(range.endContainer, range.endOffset);
+    const selectionStart = startRange.toString().length;
+    const selectionEnd = endRange.toString().length;
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    const selectedNodes: Array<{ node: Text; start: number; end: number }> = [];
+    let textNode = walker.nextNode() as Text | null;
+    let textOffset = 0;
+    while (textNode) {
+      const nodeStart = Math.max(0, selectionStart - textOffset);
+      const nodeEnd = Math.min(textNode.length, selectionEnd - textOffset);
+      if (nodeStart < nodeEnd) selectedNodes.push({ node: textNode, start: nodeStart, end: nodeEnd });
+      textOffset += textNode.length;
+      textNode = walker.nextNode() as Text | null;
+    }
+    if (!selectedNodes.length) {
+      notify("Select some story text before changing its font.");
+      return;
+    }
+
+    const fontSpans: HTMLSpanElement[] = [];
+    selectedNodes.slice().reverse().forEach(({ node, start, end }) => {
+      const selectedText = start ? node.splitText(start) : node;
+      if (end - start < selectedText.length) selectedText.splitText(end - start);
+      const fontSpan = document.createElement("span");
+      fontSpan.style.fontFamily = `"${font}"`;
+      selectedText.replaceWith(fontSpan);
+      fontSpan.append(selectedText);
+      fontSpans.unshift(fontSpan);
+    });
+    const fontRange = document.createRange();
+    const firstText = fontSpans[0].firstChild;
+    const lastText = fontSpans[fontSpans.length - 1].firstChild;
+    if (!firstText || !lastText) return;
+    fontRange.setStart(firstText, 0);
+    fontRange.setEnd(lastText, lastText.textContent?.length ?? 0);
+    selection?.removeAllRanges();
+    selection?.addRange(fontRange);
+    savedRangeRef.current = fontRange.cloneRange();
+    updatePage(sanitizeStoryMarkup(editor.innerHTML));
+  };
+  const applyInlineFormat = (command: "bold" | "italic") => {
+    const editor = storyEditorRef.current;
+    const range = savedRangeRef.current;
+    if (!editor || !range || !editor.contains(range.commonAncestorContainer) || range.collapsed) {
+      notify("Select text in your story first to format it.");
+      return;
+    }
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    editor.focus();
+    document.execCommand(command);
+    rememberSelection();
+    updatePage(sanitizeStoryMarkup(editor.innerHTML));
+  };
+  useEffect(() => {
+    const editor = storyEditorRef.current;
+    if (editor) {
+      editor.innerHTML = prepareStoryEditorContent(pages[activePage] ?? "");
+      setStoryCharacterCount(editor.innerText.length);
+    }
+    savedRangeRef.current = null;
+  }, [activePage]);
   return (
     <section className="content-wrap writer-wrap">
       <div className="writer-heading">
@@ -2255,17 +2428,36 @@ function Writer({
             <span>{storyDescription.length} / 240</span>
           </label>
           <div className="writing-tools">
-            <button aria-label="Bold" onClick={() => wrapSelection("**", "**")}>
+            <label className="font-picker">
+              <span className="sr-only">Font family</span>
+              <select title="Select story text, then choose its font" value={selectedFont} onMouseDown={rememberSelection} onChange={(event) => {
+                const font = event.target.value;
+                setSelectedFont(font);
+                applyFont(font);
+              }}>
+                <optgroup label="Sans serif">
+                  {STORY_FONTS.slice(0, 9).map((font) => <option key={font} value={font}>{font}</option>)}
+                  {STORY_FONTS.slice(13, 14).map((font) => <option key={font} value={font}>{font}</option>)}
+                  {STORY_FONTS.slice(21, 38).map((font) => <option key={font} value={font}>{font}</option>)}
+                </optgroup>
+                <optgroup label="Serif and display">
+                  {STORY_FONTS.slice(9, 13).map((font) => <option key={font} value={font}>{font}</option>)}
+                  {STORY_FONTS.slice(14, 21).map((font) => <option key={font} value={font}>{font}</option>)}
+                  {STORY_FONTS.slice(38).map((font) => <option key={font} value={font}>{font}</option>)}
+                </optgroup>
+              </select>
+            </label>
+            <button type="button" aria-label="Bold" title="Bold" onMouseDown={rememberSelection} onClick={() => applyInlineFormat("bold")}>
               <span className="tool-bold">B</span>
             </button>
-            <button aria-label="Italic" onClick={() => wrapSelection("*", "*")}>
+            <button type="button" aria-label="Italic" title="Italic" onMouseDown={rememberSelection} onClick={() => applyInlineFormat("italic")}>
               <span className="tool-italic">I</span>
             </button>
             <span />
-            <button aria-label="Add a new page" onClick={addPage}>
+            <button type="button" aria-label="Add a new page" onClick={addPage}>
               <Plus size={17} />
             </button>
-            <button aria-label="More page actions" onClick={() => setPageMenuOpen((open) => !open)}>
+            <button type="button" aria-label="More page actions" onClick={() => setPageMenuOpen((open) => !open)}>
               <MoreHorizontal size={18} />
             </button>
             {pageMenuOpen && (
@@ -2276,23 +2468,42 @@ function Writer({
               </div>
             )}
           </div>
-          <textarea
-            ref={textareaRef}
-            className="story-textarea"
-            value={pages[activePage]}
-            maxLength={PAGE_LIMIT}
-            onChange={(event) => updatePage(event.target.value)}
-            placeholder="Start with the moment you knew..."
+          <div
+            ref={storyEditorRef}
+            className="story-textarea story-rich-editor"
+            contentEditable
+            role="textbox"
+            aria-label="Story text"
+            aria-multiline="true"
+            data-placeholder="Start with the moment you knew..."
+            onMouseUp={rememberSelection}
+            onKeyUp={rememberSelection}
+            onInput={(event) => {
+              const editor = event.currentTarget;
+              if (editor.innerText.length > PAGE_LIMIT) {
+                editor.innerHTML = prepareStoryEditorContent(pages[activePage] ?? "");
+                notify(`Each page is limited to ${PAGE_LIMIT} characters.`);
+                return;
+              }
+              setStoryCharacterCount(editor.innerText.length);
+              updatePage(sanitizeStoryMarkup(editor.innerHTML));
+              rememberSelection();
+            }}
+            onPaste={(event) => {
+              event.preventDefault();
+              const text = event.clipboardData.getData("text/plain");
+              document.execCommand("insertText", false, text);
+            }}
           />
           <div
-            className={`page-limit ${pages[activePage].length >= PAGE_LIMIT ? "page-limit-full" : ""}`}
+            className={`page-limit ${storyCharacterCount >= PAGE_LIMIT ? "page-limit-full" : ""}`}
           >
             <span>
-              {pages[activePage].length} / {PAGE_LIMIT}
+              {storyCharacterCount} / {PAGE_LIMIT}
             </span>
-            {pages[activePage].length >= PAGE_LIMIT && <span>Page full</span>}
+            {storyCharacterCount >= PAGE_LIMIT && <span>Page full</span>}
           </div>
-          {pages[activePage].length >= PAGE_LIMIT && (
+          {storyCharacterCount >= PAGE_LIMIT && (
             <button className="new-page-prompt" onClick={addPage}>
               <Plus size={16} /> This page is full. Start a new page
             </button>
@@ -2390,6 +2601,16 @@ function Writer({
 }
 
 function FormattedStoryText({ text }: { text: string }) {
+  const [richContent, setRichContent] = useState<React.ReactNode[] | null>(null);
+  useEffect(() => {
+    if (!/<(?:div|p|span|strong|b|em|i|br)\b/i.test(text)) {
+      setRichContent(null);
+      return;
+    }
+    setRichContent(storyMarkupToReact(text));
+  }, [text]);
+
+  if (richContent) return <>{richContent}</>;
   const paragraphs = text.split(/\n\s*\n/).filter(Boolean);
   return <>{paragraphs.map((paragraph, paragraphIndex) => <p key={`${paragraphIndex}-${paragraph.slice(0, 12)}`}>{paragraph.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => part.startsWith("**") && part.endsWith("**") ? <strong key={index}>{part.slice(2, -2)}</strong> : part.startsWith("*") && part.endsWith("*") ? <em key={index}>{part.slice(1, -1)}</em> : <span key={index}>{part}</span>)}</p>)}</>;
 }
