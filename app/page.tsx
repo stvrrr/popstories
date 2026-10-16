@@ -22,6 +22,7 @@ import {
   Plus,
   Search,
   Send,
+  Settings2,
   Share2,
   Sparkles,
   Sun,
@@ -619,13 +620,13 @@ export default function HomePage() {
             <X size={18} />
           </button>
         </div>
-        <button className="profile-mini" onClick={() => user ? setView("Profile") : setAuthOpen(true)}>
+        <button className="profile-mini" onClick={() => setView("Settings")}>
           <div className="avatar avatar-plum">
             {user ? (user.email?.[0] ?? "U").toUpperCase() : "NS"}
           </div>
           <div>
             <strong>{user ? user.email : "Sign in to Flip Stories"}</strong>
-            <span>{user ? "Edit profile" : "Read, write, and follow"}</span>
+            <span>{user ? "Account settings" : "General settings"}</span>
           </div>
           <ChevronDown size={15} />
         </button>
@@ -664,9 +665,9 @@ export default function HomePage() {
             <Bookmark size={18} />
             <span>My shelf</span>
           </button>
-          <button className={`nav-item ${view === "Profile" ? "active" : ""}`} onClick={() => { if (user) setView("Profile"); else setAuthOpen(true); setMenuOpen(false); }}>
-            <Users size={18} />
-            <span>Profile settings</span>
+          <button className={`nav-item ${view === "Settings" ? "active" : ""}`} onClick={() => { setView("Settings"); setMenuOpen(false); }}>
+            <Settings2 size={18} />
+            <span>Settings</span>
           </button>
           {user?.id === ADMIN_USER_ID && <button className={`nav-item ${view === "Admin" ? "active" : ""}`} onClick={() => { setView("Admin"); setMenuOpen(false); }}><BarChart3 size={18} /><span>Admin panel</span></button>}
         </nav>
@@ -679,16 +680,6 @@ export default function HomePage() {
               Make room for yours.
             </p>
           </div>
-          <button
-            className="theme-toggle"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          >
-            {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
-            <span>{theme === "light" ? "Night mode" : "Day mode"}</span>
-            <span className="toggle-track">
-              <span />
-            </span>
-          </button>
         </div>
       </aside>
       {menuOpen && (
@@ -722,7 +713,7 @@ export default function HomePage() {
               <span />
             </button>
             {notificationsOpen && <NotificationPanel user={user} />}
-            <button className="avatar avatar-plum avatar-small" onClick={() => user ? setView("Profile") : setAuthOpen(true)} aria-label="Open profile">{user?.email?.[0]?.toUpperCase() ?? "NS"}</button>
+            <button className="avatar avatar-plum avatar-small" onClick={() => setView("Settings")} aria-label="Open settings">{user?.email?.[0]?.toUpperCase() ?? "NS"}</button>
           </div>
         </header>
         {view === "Discover" && (
@@ -760,7 +751,7 @@ export default function HomePage() {
         {view === "Dashboard" && (
           <Dashboard onWrite={() => setView("Write")} user={user} />
         )}
-        {view === "Profile" && <ProfileView user={user} onSignOut={handleSignOut} onDeleted={handleAccountDeleted} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
+        {view === "Settings" && <SettingsView user={user} theme={theme} setTheme={setTheme} onSignOut={handleSignOut} onDeleted={handleAccountDeleted} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
         {view === "PublicProfile" && publicProfileUsername && (
           <PublicProfile
             username={publicProfileUsername}
@@ -1225,7 +1216,8 @@ function FollowDirectory({ user, profileId, counts, onAuthor }: { user: User | n
   );
 }
 
-function ProfileView({ user, onSignOut, onDeleted, onSaved }: { user: User | null; onSignOut: () => Promise<void>; onDeleted: () => Promise<void>; onSaved: () => Promise<void> }) {
+function SettingsView({ user, theme, setTheme, onSignOut, onDeleted, onSaved }: { user: User | null; theme: "light" | "dark"; setTheme: (theme: "light" | "dark") => void; onSignOut: () => Promise<void>; onDeleted: () => Promise<void>; onSaved: () => Promise<void> }) {
+  const [section, setSection] = useState<"general" | "profile">("general");
   const [profile, setProfile] = useState<Profile>({ username: "", display_name: "", bio: "", avatar_url: "", profile_links: [] });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1243,6 +1235,9 @@ function ProfileView({ user, onSignOut, onDeleted, onSaved }: { user: User | nul
     });
   }, [user]);
   useEffect(() => {
+    if (!user) setSection("general");
+  }, [user]);
+  useEffect(() => {
     if (!deleteDialogOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || deleting) return;
@@ -1253,9 +1248,9 @@ function ProfileView({ user, onSignOut, onDeleted, onSaved }: { user: User | nul
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [deleteDialogOpen, deleting]);
-  if (!user) return <section className="content-wrap empty-feed"><p className="eyebrow"><Users size={14} /> Your profile</p><h1>Sign in to edit your <em>profile.</em></h1><p className="subtitle">Create an account to choose your name and share stories.</p></section>;
   const saveProfile = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true); setMessage("");
+    if (!user) { setSaving(false); return; }
     let avatarUrl = profile.avatar_url;
     if (avatarFile) {
       const path = `${user.id}/${crypto.randomUUID()}-${avatarFile.name}`;
@@ -1317,24 +1312,60 @@ function ProfileView({ user, onSignOut, onDeleted, onSaved }: { user: User | nul
   };
 
   return (
-    <section className="content-wrap profile-wrap">
+    <section className="content-wrap settings-wrap">
       <div className="page-heading">
         <div>
-          <p className="eyebrow"><Users size={14} /> Your profile</p>
-          <h1>Make it <em>yours.</em></h1>
-          <p className="subtitle">This is how readers will know you.</p>
+          <p className="eyebrow"><Settings2 size={14} /> Preferences</p>
+          <h1>Settings</h1>
+          <p className="subtitle">Make Flip Stories feel right for you.</p>
         </div>
-        <button
-          className="sign-out-button"
-          type="button"
-          onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}
-        >
-          <span className="sign-out-icon"><LogOut size={17} /></span>
-          <span className="sign-out-label"><strong>Sign out</strong><small>End your session</small></span>
-        </button>
+        {section === "profile" && user && (
+          <button
+            className="sign-out-button"
+            type="button"
+            onClick={() => { if (window.confirm("Are you sure you want to sign out?")) void onSignOut(); }}
+          >
+            <span className="sign-out-icon"><LogOut size={17} /></span>
+            <span className="sign-out-label"><strong>Sign out</strong><small>End your session</small></span>
+          </button>
+        )}
       </div>
-      {loading ? <p className="subtitle">Loading profile...</p> : (
+      <div className="settings-tabs" role="tablist" aria-label="Settings sections">
+        <button type="button" role="tab" aria-selected={section === "general"} className={section === "general" ? "active" : ""} onClick={() => setSection("general")}>
+          <Settings2 size={16} /> General
+        </button>
+        {user && (
+          <button type="button" role="tab" aria-selected={section === "profile"} className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}>
+            <Users size={16} /> Profile
+          </button>
+        )}
+      </div>
+      {section === "general" && (
+        <section className="settings-section" role="tabpanel" aria-label="General settings">
+          <div className="settings-section-heading">
+            <div><span className="section-kicker">Preferences</span><h2>General</h2></div>
+            <p>Choose how the reading room looks on this device.</p>
+          </div>
+          <div className="settings-option">
+            <span className="settings-option-icon">{theme === "dark" ? <Moon size={18} /> : <Sun size={18} />}</span>
+            <span className="settings-option-copy"><strong>Appearance</strong><small>Choose a light or dark reading room.</small></span>
+            <span className="appearance-choice">
+              <button type="button" className={theme === "light" ? "selected" : ""} aria-pressed={theme === "light"} onClick={() => setTheme("light")}>
+                <Sun size={15} /> Light
+              </button>
+              <button type="button" className={theme === "dark" ? "selected" : ""} aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>
+                <Moon size={15} /> Dark
+              </button>
+            </span>
+          </div>
+        </section>
+      )}
+      {section === "profile" && user && (loading ? <p className="subtitle">Loading profile...</p> : (
         <>
+          <div className="settings-section-heading profile-section-heading">
+            <div><span className="section-kicker">Your account</span><h2>Profile</h2></div>
+            <p>Update how readers see you and manage your account.</p>
+          </div>
           <form className="profile-form" onSubmit={saveProfile}>
             <div className="profile-preview">
               {profile.avatar_url
@@ -1367,7 +1398,7 @@ function ProfileView({ user, onSignOut, onDeleted, onSaved }: { user: User | nul
             </button>
           </section>
         </>
-      )}
+      ))}
       {deleteDialogOpen && (
         <div className="modal-backdrop account-delete-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDeleteDialog(); }}>
           <section className="account-delete-modal" role="dialog" aria-modal="true" aria-labelledby="account-delete-title">
