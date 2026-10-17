@@ -146,10 +146,43 @@ function prepareStoryEditorContent(content: string): string {
   return sanitizeStoryMarkup(escaped);
 }
 
-function storyMarkupToReact(markup: string): React.ReactNode[] {
+function renderStoryText(text: string, onMention: (username: string) => void, keyPrefix: string): React.ReactNode[] {
+  const mentionPattern = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,})/g;
+  const content: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = mentionPattern.exec(text))) {
+    const mentionStart = match.index + match[1].length;
+    const username = match[2];
+    if (mentionStart > lastIndex) {
+      content.push(text.slice(lastIndex, mentionStart));
+    } else if (match[1]) {
+      content.push(match[1]);
+    }
+    content.push(
+      <button
+        key={`${keyPrefix}-mention-${mentionStart}`}
+        type="button"
+        className="story-mention"
+        onClick={(event) => {
+          event.stopPropagation();
+          onMention(username.toLowerCase());
+        }}
+      >
+        @{username}
+      </button>,
+    );
+    lastIndex = mentionPattern.lastIndex;
+  }
+  if (lastIndex < text.length) content.push(text.slice(lastIndex));
+  return content.length ? content : [text];
+}
+
+function storyMarkupToReact(markup: string, onMention: (username: string) => void): React.ReactNode[] {
   const parsed = new DOMParser().parseFromString(sanitizeStoryMarkup(markup), "text/html");
   const renderNode = (node: Node, key: string): React.ReactNode => {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (node.nodeType === Node.TEXT_NODE) return renderStoryText(node.textContent ?? "", onMention, key);
     if (!(node instanceof HTMLElement)) return null;
     if (node.tagName === "BR") return <br key={key} />;
 
@@ -921,6 +954,7 @@ export default function HomePage() {
           onSave={() => toggleSave(readingStory)}
           onFollow={() => void toggleFollow(readingStory)}
           onAuthor={() => { setReadingStory(null); setPublicProfileUsername(readingStory.handle); setView("PublicProfile"); }}
+          onMention={(username) => { setReadingStory(null); setPublicProfileUsername(username); setView("PublicProfile"); }}
           onShare={() => void shareStory(readingStory)}
           onViewError={(message) => notify(`View was not recorded: ${message}`)}
           setAuthMode={setAuthMode}
@@ -1082,6 +1116,7 @@ function Discover({
             onFollow={() => onFollow(story)}
             onRead={() => setReadingStory(story)}
             onAuthor={() => onAuthor(story.handle)}
+            onMention={onAuthor}
           />
         ))}
       </div>
@@ -1178,6 +1213,7 @@ function FollowingView({
             onFollow={() => onFollow(story)}
             onRead={() => onRead(story)}
             onAuthor={() => onAuthor(story.handle)}
+            onMention={onAuthor}
           />
         ))}
       </div>
@@ -1195,6 +1231,7 @@ function StoryCard({
   onFollow,
   onRead,
   onAuthor,
+  onMention,
 }: {
   story: Story;
   liked: boolean;
@@ -1205,6 +1242,7 @@ function StoryCard({
   onFollow: () => void;
   onRead: () => void;
   onAuthor: () => void;
+  onMention: (username: string) => void;
 }) {
   return (
     <article className="story-card" onClick={onRead} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onRead(); }} role="button" tabIndex={0}>
@@ -1220,7 +1258,7 @@ function StoryCard({
           <span>{story.date}</span>
         </div>
         <h3>{story.title}</h3>
-        <p>{story.excerpt}</p>
+        <p>{renderStoryText(story.excerpt, onMention, `excerpt-${story.id}`)}</p>
         <div className="story-card-bottom">
           <button type="button" className="author-chip" onClick={(event) => { event.stopPropagation(); onAuthor(); }} aria-label={`Open ${story.author}'s profile`}>
             {story.avatarUrl ? <img className="avatar avatar-image" src={story.avatarUrl} alt="" /> : <span className={`avatar avatar-${story.accent}`}>{story.initials}</span>}
@@ -1631,7 +1669,7 @@ function PublicProfile({
     void load();
   }, [username, user]);
   if (!profile) return <section className="content-wrap empty-feed"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back</button><h1>Profile not found.</h1></section>;
-  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}{profile.profile_links.length ? <div className="profile-link-list">{profile.profile_links.map((link) => { const hostname = new URL(link).hostname.replace(/^www\./, ""); return <a key={link} className="profile-link" href={link} target="_blank" rel="noreferrer noopener">{hostname}</a>; })}</div> : null}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><FollowDirectory user={user} profileId={profile.id} counts={followCounts} onAuthor={onAuthor} /><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={isFollowing} onLike={() => {}} onSave={() => {}} onFollow={() => void toggleProfileFollow()} onRead={() => onRead(story)} onAuthor={() => {}} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
+  return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}{profile.profile_links.length ? <div className="profile-link-list">{profile.profile_links.map((link) => { const hostname = new URL(link).hostname.replace(/^www\./, ""); return <a key={link} className="profile-link" href={link} target="_blank" rel="noreferrer noopener">{hostname}</a>; })}</div> : null}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><FollowDirectory user={user} profileId={profile.id} counts={followCounts} onAuthor={onAuthor} /><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={isFollowing} onLike={() => {}} onSave={() => {}} onFollow={() => void toggleProfileFollow()} onRead={() => onRead(story)} onAuthor={() => {}} onMention={onAuthor} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
 }
 
 function NotificationPanel({ user }: { user: User | null }) {
@@ -2003,6 +2041,7 @@ function ShelfView({
                 onFollow={() => onFollow(story)}
                 onRead={() => onRead(story)}
                 onAuthor={() => onAuthor(story.handle)}
+                onMention={onAuthor}
               />
             ))}
           </div>
@@ -2983,19 +3022,19 @@ function Writer({
   );
 }
 
-function FormattedStoryText({ text }: { text: string }) {
+function FormattedStoryText({ text, onMention }: { text: string; onMention: (username: string) => void }) {
   const [richContent, setRichContent] = useState<React.ReactNode[] | null>(null);
   useEffect(() => {
     if (!/<(?:div|p|span|strong|b|em|i|br)\b/i.test(text)) {
       setRichContent(null);
       return;
     }
-    setRichContent(storyMarkupToReact(text));
+    setRichContent(storyMarkupToReact(text, onMention));
   }, [text]);
 
   if (richContent) return <>{richContent}</>;
   const paragraphs = text.split(/\n\s*\n/).filter(Boolean);
-  return <>{paragraphs.map((paragraph, paragraphIndex) => <p key={`${paragraphIndex}-${paragraph.slice(0, 12)}`}>{paragraph.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => part.startsWith("**") && part.endsWith("**") ? <strong key={index}>{part.slice(2, -2)}</strong> : part.startsWith("*") && part.endsWith("*") ? <em key={index}>{part.slice(1, -1)}</em> : <span key={index}>{part}</span>)}</p>)}</>;
+  return <>{paragraphs.map((paragraph, paragraphIndex) => <p key={`${paragraphIndex}-${paragraph.slice(0, 12)}`}>{paragraph.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => part.startsWith("**") && part.endsWith("**") ? <strong key={index}>{renderStoryText(part.slice(2, -2), onMention, `plain-${paragraphIndex}-${index}`)}</strong> : part.startsWith("*") && part.endsWith("*") ? <em key={index}>{renderStoryText(part.slice(1, -1), onMention, `plain-${paragraphIndex}-${index}`)}</em> : <span key={index}>{renderStoryText(part, onMention, `plain-${paragraphIndex}-${index}`)}</span>)}</p>)}</>;
 }
 
 function ReaderModal({
@@ -3009,6 +3048,7 @@ function ReaderModal({
   onSave,
   onFollow,
   onAuthor,
+  onMention,
   onShare,
   onViewError,
   setAuthMode,
@@ -3024,6 +3064,7 @@ function ReaderModal({
   onSave: () => void;
   onFollow: () => void;
   onAuthor: () => void;
+  onMention: (username: string) => void;
   onShare: () => void;
   onViewError: (message: string) => void;
   setAuthMode: (mode: "login" | "signup") => void;
@@ -3186,7 +3227,7 @@ function ReaderModal({
             </button>
           </div>
           <div className="reader-body">
-            <FormattedStoryText text={pages[pageIndex] ?? ""} />
+            <FormattedStoryText text={pages[pageIndex] ?? ""} onMention={onMention} />
           </div>
           <div className="reader-pages"><button onClick={() => setPageIndex(Math.max(0, pageIndex - 1))} disabled={pageIndex === 0}><ChevronLeft size={16} /></button><span>Page {pageIndex + 1} of {pages.length}</span><button onClick={() => setPageIndex(Math.min(pages.length - 1, pageIndex + 1))} disabled={pageIndex === pages.length - 1}><ChevronRight size={16} /></button></div>
           <div className="reader-actions">
