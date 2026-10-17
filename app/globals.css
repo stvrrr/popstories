@@ -97,7 +97,10 @@
 .reader-translation-result { margin-top:12px; }
 .comment-translation-result { margin-top:8px; }
 .story-card-bottom { margin-top:20px; }
-.shelf-wrap { max-width:1050px; }
+.shelf-wrap { max-width:1050px; min-width:0; }
+.shelf-section { min-width:0; }
+.shelf-wrap .story-list,.shelf-wrap .story-card,.shelf-wrap .story-card-main { min-width:0; }
+.shelf-wrap .story-card h3,.shelf-wrap .story-card p { overflow-wrap:anywhere; }
 .shelf-section + .shelf-section { margin-top:46px; }
 .shelf-section-count { color:var(--faint); font-size:11px; }
 .shelf-list { display:grid; gap:12px; }
