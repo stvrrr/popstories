@@ -308,7 +308,13 @@ function TranslationAction({
 
   return (
     <div className="translation-action">
-      <button type="button" className="translation-button" onClick={(event) => { event.stopPropagation(); void translate(); }} disabled={loading}>
+      <button
+        type="button"
+        className="translation-button"
+        onClick={(event) => { event.stopPropagation(); void translate(); }}
+        onKeyDown={(event) => event.stopPropagation()}
+        disabled={loading}
+      >
         <Languages size={14} /> {loading ? t("Translating...") : showTranslation ? t("Hide translation") : t("Translate")}
       </button>
       {error && <p className="translation-error" role="alert">{error}</p>}
