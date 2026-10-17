@@ -82,6 +82,8 @@
 .story-card h3 { margin-top:10px; font-size:21px; }
 .story-card-bottom { margin-top:20px; }
 .shelf-wrap { max-width:1050px; }
+.shelf-section + .shelf-section { margin-top:46px; }
+.shelf-section-count { color:var(--faint); font-size:11px; }
 .shelf-list { display:grid; gap:12px; }
 .shelf-row { display:flex; align-items:center; justify-content:space-between; gap:22px; padding:20px 22px; border:1px solid var(--line); border-radius:10px; background:var(--raised); }
 .shelf-row-copy { min-width:0; }

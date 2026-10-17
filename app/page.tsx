@@ -811,7 +811,19 @@ export default function HomePage() {
         )}
         {view === "Admin" && user?.id === ADMIN_USER_ID && <AdminPanel />}
         {view === "Shelf" && (
-          <ShelfView user={user} onWrite={() => { setEditingStoryId(null); setView("Write"); }} onEdit={async (storyId) => {
+          <ShelfView
+            user={user}
+            discoverStories={stories}
+            saved={saved}
+            liked={liked}
+            following={following}
+            onLike={toggleLike}
+            onSave={toggleSave}
+            onFollow={toggleFollow}
+            onRead={setReadingStory}
+            onAuthor={(username) => { setPublicProfileUsername(username); setView("PublicProfile"); }}
+            onWrite={() => { setEditingStoryId(null); setView("Write"); }}
+            onEdit={async (storyId) => {
             const [{ data: story }, { data: pageRows }] = await Promise.all([
               supabase.from("stories").select("id,title,excerpt,category,visibility").eq("id", storyId).single(),
               supabase.from("story_pages").select("page_number,content").eq("story_id", storyId).order("page_number"),
@@ -830,7 +842,8 @@ export default function HomePage() {
             if (error) { notify(error.message); return; }
             await loadStories();
             notify("Story deleted");
-          }} />
+          }}
+          />
         )}
         {view === "Write" && (
           <Writer
@@ -1859,21 +1872,135 @@ function PinningPanel() {
   return <section className="content-wrap admin-settings-wrap"><div className="analytics-card admin-pinning-panel"><span className="section-kicker">Pinned stories</span><h2>Choose stories for the front of Discover</h2>{error ? <p className="profile-error">{error}</p> : message ? <p className="admin-success">{message}</p> : null}<div className="admin-story-scroll">{stories.length ? stories.map((story) => <div className="admin-story-item" key={story.id}><div><strong>{story.title}</strong><small>{story.visibility} · {story.status}{story.is_pinned && story.pin_label ? ` · ${story.pin_label}` : ""}</small></div><button type="button" className={`quiet-button ${story.is_pinned ? "selected" : ""}`} onClick={() => void togglePin(story)} disabled={savingId === story.id} aria-label={story.is_pinned ? "Unpin story" : "Pin story"} title={story.is_pinned ? "Unpin story" : "Pin story"}><Pin size={14} /></button></div>) : <p className="subtitle">No stories yet.</p>}</div></div></section>;
 }
 
-function ShelfView({ user, onWrite, onEdit, onDelete }: { user: User | null; onWrite: () => void; onEdit: (storyId: string) => void; onDelete: (storyId: string) => void }) {
-  const [stories, setStories] = useState<Array<{ id: string; title: string; excerpt: string | null; status: string; visibility: string; updated_at: string }>>([]);
+function ShelfView({
+  user,
+  discoverStories,
+  saved,
+  liked,
+  following,
+  onLike,
+  onSave,
+  onFollow,
+  onRead,
+  onAuthor,
+  onWrite,
+  onEdit,
+  onDelete,
+}: {
+  user: User | null;
+  discoverStories: Story[];
+  saved: string[];
+  liked: string[];
+  following: string[];
+  onLike: (story: Story) => void;
+  onSave: (story: Story) => void;
+  onFollow: (story: Story) => void;
+  onRead: (story: Story) => void;
+  onAuthor: (username: string) => void;
+  onWrite: () => void;
+  onEdit: (storyId: string) => void;
+  onDelete: (storyId: string) => void;
+}) {
+  const [authoredStories, setAuthoredStories] = useState<Array<{ id: string; title: string; excerpt: string | null; status: string; visibility: string; updated_at: string }>>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let active = true;
     const load = async () => {
       if (!user) { setLoading(false); return; }
       const { data } = await supabase.from("stories").select("id,title,excerpt,status,visibility,updated_at").eq("author_id", user.id).order("updated_at", { ascending: false });
-      if (active) { setStories(data ?? []); setLoading(false); }
+      if (active) { setAuthoredStories(data ?? []); setLoading(false); }
     };
     void load();
     return () => { active = false; };
   }, [user]);
   if (!user) return <section className="content-wrap empty-feed"><p className="eyebrow"><Bookmark size={14} /> Your shelf</p><h1>Sign in to keep your <em>stories.</em></h1><p className="subtitle">Your drafts, published stories, and edits will live here.</p></section>;
-  return <section className="content-wrap shelf-wrap"><div className="page-heading"><div><p className="eyebrow"><Bookmark size={14} /> Your library</p><h1>Stories you&apos;ve <em>made.</em></h1><p className="subtitle">Edit, publish, or clear out anything on your shelf.</p></div><button className="primary-button" onClick={onWrite}><PenLine size={17} /> New story</button></div>{loading ? <p className="subtitle">Loading your shelf...</p> : !stories.length ? <div className="shelf-empty"><BookOpen size={24} /><h2>Your shelf is empty.</h2><p>Start with a page and make it yours.</p><button className="text-button" onClick={onWrite}>Write your first story <ChevronRight size={15} /></button></div> : <div className="shelf-list">{stories.map((story) => <article className="shelf-row" key={story.id}><div className="shelf-row-copy"><div className="story-card-meta"><span className={`status-pill status-${story.status}`}>{story.status}</span><span>{story.visibility}</span></div><h2>{story.title}</h2><p>{story.excerpt || "No excerpt yet."}</p><small>Updated {new Date(story.updated_at).toLocaleDateString()}</small></div><div className="shelf-row-actions"><button className="quiet-button" onClick={() => onEdit(story.id)}><PenLine size={15} /> Edit</button><button className="delete-button" onClick={() => { if (window.confirm(`Delete “${story.title}”?`)) onDelete(story.id); }}><X size={15} /> Delete</button></div></article>)}</div>}</section>;
+  const savedStories = discoverStories.filter((story) => saved.includes(story.id));
+  return (
+    <section className="content-wrap shelf-wrap">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow"><Bookmark size={14} /> Your library</p>
+          <h1>Your <em>stories.</em></h1>
+          <p className="subtitle">Stories you&apos;ve written and stories you&apos;ve saved.</p>
+        </div>
+        <button className="primary-button" onClick={onWrite}><PenLine size={17} /> New story</button>
+      </div>
+
+      <section className="shelf-section">
+        <div className="section-heading">
+          <div>
+            <span className="section-kicker">Made by you</span>
+            <h2>Your stories</h2>
+          </div>
+          {!loading && <span className="shelf-section-count">{authoredStories.length}</span>}
+        </div>
+        {loading ? (
+          <p className="subtitle">Loading your stories...</p>
+        ) : authoredStories.length ? (
+          <div className="shelf-list">
+            {authoredStories.map((story) => (
+              <article className="shelf-row" key={story.id}>
+                <div className="shelf-row-copy">
+                  <div className="story-card-meta">
+                    <span className={`status-pill status-${story.status}`}>{story.status}</span>
+                    <span>{story.visibility}</span>
+                  </div>
+                  <h2>{story.title}</h2>
+                  <p>{story.excerpt || "No excerpt yet."}</p>
+                  <small>Updated {new Date(story.updated_at).toLocaleDateString()}</small>
+                </div>
+                <div className="shelf-row-actions">
+                  <button className="quiet-button" onClick={() => onEdit(story.id)}><PenLine size={15} /> Edit</button>
+                  <button className="delete-button" onClick={() => { if (window.confirm(`Delete “${story.title}”?`)) onDelete(story.id); }}><X size={15} /> Delete</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="shelf-empty">
+            <BookOpen size={24} />
+            <h2>You haven&apos;t made any stories yet.</h2>
+            <p>Start with a page and make it yours.</p>
+            <button className="text-button" onClick={onWrite}>Write your first story <ChevronRight size={15} /></button>
+          </div>
+        )}
+      </section>
+
+      <section className="shelf-section">
+        <div className="section-heading">
+          <div>
+            <span className="section-kicker">From Discover</span>
+            <h2>Saved stories</h2>
+          </div>
+          <span className="shelf-section-count">{savedStories.length}</span>
+        </div>
+        {savedStories.length ? (
+          <div className="story-list">
+            {savedStories.map((story) => (
+              <StoryCard
+                key={story.id}
+                story={story}
+                liked={liked.includes(story.id)}
+                saved={saved.includes(story.id)}
+                following={following.includes(story.authorId)}
+                onLike={() => onLike(story)}
+                onSave={() => onSave(story)}
+                onFollow={() => onFollow(story)}
+                onRead={() => onRead(story)}
+                onAuthor={() => onAuthor(story.handle)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="shelf-empty">
+            <Bookmark size={24} />
+            <h2>No saved stories yet.</h2>
+            <p>Favorite stories in Discover and they&apos;ll appear here.</p>
+          </div>
+        )}
+      </section>
+    </section>
+  );
 }
 
 function LegacyDashboard({ onWrite }: { onWrite: () => void }) {
