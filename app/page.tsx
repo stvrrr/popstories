@@ -789,6 +789,15 @@ export default function HomePage() {
             <strong>{view}</strong>
           </div>
           <div className="top-actions">
+            <a
+              className="discord-invite-link"
+              href="https://discord.gg/2YJbb4Vrmb"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle size={16} />
+              <span>Join Discord</span>
+            </a>
             <button
               className="icon-button notification-button"
               onClick={() => setNotificationsOpen((open) => !open)}
