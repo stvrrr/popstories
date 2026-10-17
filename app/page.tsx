@@ -662,7 +662,15 @@ export default function HomePage() {
             <X size={18} />
           </button>
         </div>
-        <button className="profile-mini" onClick={() => { setView("Settings"); setMenuOpen(false); }}>
+        <button className="profile-mini" onClick={() => {
+          setMenuOpen(false);
+          if (user) {
+            setView("Settings");
+          } else {
+            setAuthMode("login");
+            setAuthOpen(true);
+          }
+        }}>
           <div className="avatar avatar-plum">
             {user ? (user.email?.[0] ?? "U").toUpperCase() : "NS"}
           </div>
@@ -756,7 +764,14 @@ export default function HomePage() {
               <span />
             </button>
             {notificationsOpen && <NotificationPanel user={user} />}
-            <button className="avatar avatar-plum avatar-small" onClick={() => setView("Settings")} aria-label="Open settings">{user?.email?.[0]?.toUpperCase() ?? "NS"}</button>
+            <button className="avatar avatar-plum avatar-small" onClick={() => {
+              if (user) {
+                setView("Settings");
+              } else {
+                setAuthMode("login");
+                setAuthOpen(true);
+              }
+            }} aria-label={user ? "Open settings" : "Sign in"}>{user?.email?.[0]?.toUpperCase() ?? "NS"}</button>
           </div>
         </header>
         {view === "Discover" && (
