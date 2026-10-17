@@ -13,6 +13,7 @@ import {
   Heart,
   Home,
   Leaf,
+  Languages,
   LogOut,
   Menu,
   MessageCircle,
@@ -33,7 +34,7 @@ import {
   X,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 
 type Story = {
@@ -55,15 +56,166 @@ type Story = {
   pinLabel?: string | null;
 };
 type Profile = { id?: string; username: string; display_name: string; bio: string; avatar_url: string; profile_links: string[] };
+type Language = "en" | "es" | "fr" | "de" | "pt" | "it" | "ja" | "ko" | "zh" | "ar";
+type NotificationKind = "like" | "favorite" | "comment" | "follow";
 type NotificationItem = {
   id: string;
-  kind: "like" | "favorite" | "comment" | "follow";
+  kind: NotificationKind;
   actor: string;
   actorAvatar: string | null;
   storyTitle?: string;
   detail?: string;
   createdAt: string;
 };
+const LANGUAGE_OPTIONS: Array<{ value: Language; label: string }> = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Español" },
+  { value: "fr", label: "Français" },
+  { value: "de", label: "Deutsch" },
+  { value: "pt", label: "Português" },
+  { value: "it", label: "Italiano" },
+  { value: "ja", label: "日本語" },
+  { value: "ko", label: "한국어" },
+  { value: "zh", label: "中文" },
+  { value: "ar", label: "العربية" },
+];
+const NOTIFICATION_KINDS: NotificationKind[] = ["like", "follow", "favorite", "comment"];
+function notificationKindLabel(kind: NotificationKind) {
+  return kind === "like" ? "Likes"
+    : kind === "follow" ? "Follows"
+      : kind === "favorite" ? "Favorites"
+        : "Comments";
+}
+function notificationSelectionLabel(kinds: NotificationKind[], t: (text: string) => string) {
+  if (kinds.length === NOTIFICATION_KINDS.length) return t("All types");
+  if (!kinds.length) return t("No types selected");
+  return kinds.map((kind) => t(notificationKindLabel(kind))).join(", ");
+}
+const LOCALE_BY_LANGUAGE: Record<Language, string> = {
+  en: "en-US", es: "es-ES", fr: "fr-FR", de: "de-DE", pt: "pt-BR",
+  it: "it-IT", ja: "ja-JP", ko: "ko-KR", zh: "zh-CN", ar: "ar",
+};
+const TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>> = {
+  es: {
+    Discover: "Descubrir", People: "Personas", Following: "Siguiendo", Dashboard: "Panel", "Write a story": "Escribir una historia", "My shelf": "Mi biblioteca", Settings: "Ajustes", "Admin panel": "Panel de administración", "Your space": "Tu espacio", "Sign in to Flip Stories": "Inicia sesión en Flip Stories", "Account settings": "Ajustes de cuenta", "General settings": "Ajustes generales", Notifications: "Notificaciones", "Recent activity": "Actividad reciente", "Loading activity...": "Cargando actividad...", "Sign in to see activity.": "Inicia sesión para ver la actividad.", "No recent likes, comments, favorites, or follows.": "No hay Me gusta, comentarios, favoritos ni seguidores recientes.", "liked your story": "indicó que le gusta tu historia", "favorited your story": "guardó tu historia en favoritos", "commented on your story": "comentó tu historia", "started following you": "empezó a seguirte", General: "General", Profile: "Perfil", Preferences: "Preferencias", Appearance: "Apariencia", "Choose a light or dark reading room.": "Elige un modo claro u oscuro.", "Mobile navigation": "Navegación móvil", "Choose how to open the menu on smaller screens.": "Elige cómo abrir el menú en pantallas pequeñas.", "Bottom bar": "Barra inferior", Left: "Izquierda", Right: "Derecha", Language: "Idioma", "Choose the language for the app interface.": "Elige el idioma de la interfaz.", "Notification preferences": "Preferencias de notificaciones", "Choose which activity appears in your notifications.": "Elige qué actividad aparece en tus notificaciones.", Likes: "Me gusta", Follows: "Seguimientos", Favorites: "Favoritos", Comments: "Comentarios", "All types": "Todos los tipos", "No types selected": "Ningún tipo seleccionado", "Find your people.": "Encuentra a tu gente.", "Search people": "Buscar personas", "Search by name or @username": "Buscar por nombre o @usuario", "Readers and writers": "Lectores y escritores", "People discovery": "Descubrir personas", "Find more writers": "Encuentra más escritores", "Discover people": "Descubrir personas", "Write the first story": "Escribe la primera historia", Read: "Leer", "Follow": "Seguir", "Sign out": "Cerrar sesión", "Save profile": "Guardar perfil", "Change password": "Cambiar contraseña", "Change email": "Cambiar correo electrónico",
+  },
+  fr: {
+    Discover: "Découvrir", People: "Personnes", Following: "Abonnements", Dashboard: "Tableau de bord", "Write a story": "Écrire une histoire", "My shelf": "Ma bibliothèque", Settings: "Paramètres", "Admin panel": "Administration", "Your space": "Votre espace", "Sign in to Flip Stories": "Se connecter à Flip Stories", "Account settings": "Paramètres du compte", "General settings": "Paramètres généraux", Notifications: "Notifications", "Recent activity": "Activité récente", "Loading activity...": "Chargement de l’activité...", "Sign in to see activity.": "Connectez-vous pour voir l’activité.", "No recent likes, comments, favorites, or follows.": "Aucun J’aime, commentaire, favori ou abonnement récent.", "liked your story": "a aimé votre histoire", "favorited your story": "a ajouté votre histoire aux favoris", "commented on your story": "a commenté votre histoire", "started following you": "a commencé à vous suivre", General: "Général", Profile: "Profil", Preferences: "Préférences", Appearance: "Apparence", "Choose a light or dark reading room.": "Choisissez un thème clair ou sombre.", "Mobile navigation": "Navigation mobile", "Choose how to open the menu on smaller screens.": "Choisissez comment ouvrir le menu sur petit écran.", "Bottom bar": "Barre inférieure", Left: "Gauche", Right: "Droite", Language: "Langue", "Choose the language for the app interface.": "Choisissez la langue de l’interface.", "Notification preferences": "Préférences de notification", "Choose which activity appears in your notifications.": "Choisissez les activités affichées dans vos notifications.", Likes: "J’aime", Follows: "Abonnements", Favorites: "Favoris", Comments: "Commentaires", "All types": "Tous les types", "No types selected": "Aucun type sélectionné", "Find your people.": "Trouvez votre communauté.", "Search people": "Rechercher des personnes", "Search by name or @username": "Rechercher par nom ou @pseudo", "Readers and writers": "Lecteurs et auteurs", "People discovery": "Découvrir des personnes", "Find more writers": "Trouver d’autres auteurs", "Discover people": "Découvrir des personnes", "Write the first story": "Écrire la première histoire", Read: "Lire", Follow: "Suivre", "Sign out": "Se déconnecter", "Save profile": "Enregistrer le profil", "Change password": "Changer le mot de passe", "Change email": "Changer l’adresse e-mail",
+  },
+  de: {
+    Discover: "Entdecken", People: "Personen", Following: "Gefolgt", Dashboard: "Übersicht", "Write a story": "Geschichte schreiben", "My shelf": "Meine Bibliothek", Settings: "Einstellungen", "Admin panel": "Adminbereich", "Your space": "Dein Bereich", "Sign in to Flip Stories": "Bei Flip Stories anmelden", "Account settings": "Kontoeinstellungen", "General settings": "Allgemeine Einstellungen", Notifications: "Benachrichtigungen", "Recent activity": "Letzte Aktivitäten", "Loading activity...": "Aktivitäten werden geladen...", "Sign in to see activity.": "Melde dich an, um Aktivitäten zu sehen.", "No recent likes, comments, favorites, or follows.": "Keine neuen Likes, Kommentare, Favoriten oder Follower.", "liked your story": "gefällt deine Geschichte", "favorited your story": "hat deine Geschichte gespeichert", "commented on your story": "hat deine Geschichte kommentiert", "started following you": "folgt dir jetzt", General: "Allgemein", Profile: "Profil", Preferences: "Einstellungen", Appearance: "Darstellung", "Choose a light or dark reading room.": "Wähle ein helles oder dunkles Design.", "Mobile navigation": "Mobile Navigation", "Choose how to open the menu on smaller screens.": "Wähle, wie das Menü auf kleinen Bildschirmen geöffnet wird.", "Bottom bar": "Untere Leiste", Left: "Links", Right: "Rechts", Language: "Sprache", "Choose the language for the app interface.": "Wähle die Sprache der App-Oberfläche.", "Notification preferences": "Benachrichtigungseinstellungen", "Choose which activity appears in your notifications.": "Wähle, welche Aktivitäten angezeigt werden.", Likes: "Likes", Follows: "Follower", Favorites: "Favoriten", Comments: "Kommentare", "All types": "Alle Typen", "No types selected": "Keine Typen ausgewählt", "Find your people.": "Finde deine Community.", "Search people": "Personen suchen", "Search by name or @username": "Nach Name oder @Benutzername suchen", "Readers and writers": "Leser und Autoren", "People discovery": "Personen entdecken", "Find more writers": "Weitere Autoren finden", "Discover people": "Personen entdecken", "Write the first story": "Schreibe die erste Geschichte", Read: "Lesen", Follow: "Folgen", "Sign out": "Abmelden", "Save profile": "Profil speichern", "Change password": "Passwort ändern", "Change email": "E-Mail ändern",
+  },
+  pt: {
+    Discover: "Descobrir", People: "Pessoas", Following: "Seguindo", Dashboard: "Painel", "Write a story": "Escrever uma história", "My shelf": "Minha biblioteca", Settings: "Configurações", "Admin panel": "Painel administrativo", "Your space": "Seu espaço", "Sign in to Flip Stories": "Entrar no Flip Stories", "Account settings": "Configurações da conta", "General settings": "Configurações gerais", Notifications: "Notificações", "Recent activity": "Atividade recente", "Loading activity...": "Carregando atividade...", "Sign in to see activity.": "Entre para ver a atividade.", "No recent likes, comments, favorites, or follows.": "Sem curtidas, comentários, favoritos ou novos seguidores.", "liked your story": "curtiu sua história", "favorited your story": "favoritou sua história", "commented on your story": "comentou sua história", "started following you": "começou a seguir você", General: "Geral", Profile: "Perfil", Preferences: "Preferências", Appearance: "Aparência", "Choose a light or dark reading room.": "Escolha um tema claro ou escuro.", "Mobile navigation": "Navegação móvel", "Choose how to open the menu on smaller screens.": "Escolha como abrir o menu em telas menores.", "Bottom bar": "Barra inferior", Left: "Esquerda", Right: "Direita", Language: "Idioma", "Choose the language for the app interface.": "Escolha o idioma da interface.", "Notification preferences": "Preferências de notificação", "Choose which activity appears in your notifications.": "Escolha quais atividades aparecem nas notificações.", Likes: "Curtidas", Follows: "Seguidores", Favorites: "Favoritos", Comments: "Comentários", "All types": "Todos os tipos", "No types selected": "Nenhum tipo selecionado", "Find your people.": "Encontre sua comunidade.", "Search people": "Buscar pessoas", "Search by name or @username": "Buscar por nome ou @usuário", "Readers and writers": "Leitores e escritores", "People discovery": "Descobrir pessoas", "Find more writers": "Encontrar escritores", "Discover people": "Descobrir pessoas", "Write the first story": "Escreva a primeira história", Read: "Ler", Follow: "Seguir", "Sign out": "Sair", "Save profile": "Salvar perfil", "Change password": "Alterar senha", "Change email": "Alterar e-mail",
+  },
+  it: {
+    Discover: "Scopri", People: "Persone", Following: "Seguiti", Dashboard: "Dashboard", "Write a story": "Scrivi una storia", "My shelf": "La mia libreria", Settings: "Impostazioni", "Admin panel": "Pannello admin", "Your space": "Il tuo spazio", "Sign in to Flip Stories": "Accedi a Flip Stories", "Account settings": "Impostazioni account", "General settings": "Impostazioni generali", Notifications: "Notifiche", "Recent activity": "Attività recenti", "Loading activity...": "Caricamento attività...", "Sign in to see activity.": "Accedi per vedere le attività.", "No recent likes, comments, favorites, or follows.": "Nessun Mi piace, commento, preferito o nuovo follower.", "liked your story": "ha apprezzato la tua storia", "favorited your story": "ha salvato la tua storia tra i preferiti", "commented on your story": "ha commentato la tua storia", "started following you": "ha iniziato a seguirti", General: "Generale", Profile: "Profilo", Preferences: "Preferenze", Appearance: "Aspetto", "Choose a light or dark reading room.": "Scegli un tema chiaro o scuro.", "Mobile navigation": "Navigazione mobile", "Choose how to open the menu on smaller screens.": "Scegli come aprire il menu sugli schermi piccoli.", "Bottom bar": "Barra inferiore", Left: "Sinistra", Right: "Destra", Language: "Lingua", "Choose the language for the app interface.": "Scegli la lingua dell’interfaccia.", "Notification preferences": "Preferenze notifiche", "Choose which activity appears in your notifications.": "Scegli quali attività mostrare nelle notifiche.", Likes: "Mi piace", Follows: "Follower", Favorites: "Preferiti", Comments: "Commenti", "All types": "Tutti i tipi", "No types selected": "Nessun tipo selezionato", "Find your people.": "Trova la tua community.", "Search people": "Cerca persone", "Search by name or @username": "Cerca per nome o @username", "Readers and writers": "Lettori e scrittori", "People discovery": "Scopri persone", "Find more writers": "Trova altri scrittori", "Discover people": "Scopri persone", "Write the first story": "Scrivi la prima storia", Read: "Leggi", Follow: "Segui", "Sign out": "Esci", "Save profile": "Salva profilo", "Change password": "Cambia password", "Change email": "Cambia email",
+  },
+  ja: {
+    Discover: "見つける", People: "ユーザー", Following: "フォロー中", Dashboard: "ダッシュボード", "Write a story": "ストーリーを書く", "My shelf": "マイライブラリ", Settings: "設定", "Admin panel": "管理パネル", "Your space": "マイスペース", "Sign in to Flip Stories": "Flip Storiesにログイン", "Account settings": "アカウント設定", "General settings": "一般設定", Notifications: "通知", "Recent activity": "最近のアクティビティ", "Loading activity...": "アクティビティを読み込み中...", "Sign in to see activity.": "ログインしてアクティビティを確認してください。", "No recent likes, comments, favorites, or follows.": "最近のいいね、コメント、お気に入り、フォローはありません。", "liked your story": "あなたのストーリーにいいねしました", "favorited your story": "あなたのストーリーをお気に入りに追加しました", "commented on your story": "あなたのストーリーにコメントしました", "started following you": "あなたをフォローし始めました", General: "一般", Profile: "プロフィール", Preferences: "環境設定", Appearance: "外観", "Choose a light or dark reading room.": "ライトまたはダークテーマを選択します。", "Mobile navigation": "モバイルナビゲーション", "Choose how to open the menu on smaller screens.": "小さい画面でのメニュー表示方法を選択します。", "Bottom bar": "下部バー", Left: "左", Right: "右", Language: "言語", "Choose the language for the app interface.": "アプリの表示言語を選択します。", "Notification preferences": "通知設定", "Choose which activity appears in your notifications.": "通知に表示するアクティビティを選択します。", Likes: "いいね", Follows: "フォロー", Favorites: "お気に入り", Comments: "コメント", "All types": "すべて", "No types selected": "未選択", "Find your people.": "仲間を見つけよう。", "Search people": "ユーザーを検索", "Search by name or @username": "名前または@ユーザー名で検索", "Readers and writers": "読者と作家", "People discovery": "ユーザーを探す", "Find more writers": "作家をもっと探す", "Discover people": "ユーザーを探す", "Write the first story": "最初のストーリーを書く", Read: "読む", Follow: "フォロー", "Sign out": "ログアウト", "Save profile": "プロフィールを保存", "Change password": "パスワードを変更", "Change email": "メールアドレスを変更",
+  },
+  ko: {
+    Discover: "둘러보기", People: "사용자", Following: "팔로잉", Dashboard: "대시보드", "Write a story": "스토리 쓰기", "My shelf": "내 서재", Settings: "설정", "Admin panel": "관리자 패널", "Your space": "내 공간", "Sign in to Flip Stories": "Flip Stories 로그인", "Account settings": "계정 설정", "General settings": "일반 설정", Notifications: "알림", "Recent activity": "최근 활동", "Loading activity...": "활동 불러오는 중...", "Sign in to see activity.": "활동을 보려면 로그인하세요.", "No recent likes, comments, favorites, or follows.": "최근 좋아요, 댓글, 즐겨찾기 또는 팔로우가 없습니다.", "liked your story": "님이 회원님의 스토리를 좋아합니다", "favorited your story": "님이 회원님의 스토리를 즐겨찾기에 추가했습니다", "commented on your story": "님이 회원님의 스토리에 댓글을 남겼습니다", "started following you": "님이 회원님을 팔로우하기 시작했습니다", General: "일반", Profile: "프로필", Preferences: "환경 설정", Appearance: "모양", "Choose a light or dark reading room.": "밝거나 어두운 테마를 선택하세요.", "Mobile navigation": "모바일 탐색", "Choose how to open the menu on smaller screens.": "작은 화면에서 메뉴를 여는 방식을 선택하세요.", "Bottom bar": "하단 바", Left: "왼쪽", Right: "오른쪽", Language: "언어", "Choose the language for the app interface.": "앱 인터페이스 언어를 선택하세요.", "Notification preferences": "알림 설정", "Choose which activity appears in your notifications.": "알림에 표시할 활동을 선택하세요.", Likes: "좋아요", Follows: "팔로우", Favorites: "즐겨찾기", Comments: "댓글", "All types": "전체 유형", "No types selected": "선택한 유형 없음", "Find your people.": "새로운 사람을 만나보세요.", "Search people": "사용자 검색", "Search by name or @username": "이름 또는 @사용자 이름 검색", "Readers and writers": "독자와 작가", "People discovery": "사용자 찾기", "Find more writers": "작가 더 찾기", "Discover people": "사용자 찾기", "Write the first story": "첫 스토리 쓰기", Read: "읽기", Follow: "팔로우", "Sign out": "로그아웃", "Save profile": "프로필 저장", "Change password": "비밀번호 변경", "Change email": "이메일 변경",
+  },
+  zh: {
+    Discover: "发现", People: "用户", Following: "关注", Dashboard: "控制面板", "Write a story": "写故事", "My shelf": "我的书架", Settings: "设置", "Admin panel": "管理面板", "Your space": "你的空间", "Sign in to Flip Stories": "登录 Flip Stories", "Account settings": "账户设置", "General settings": "常规设置", Notifications: "通知", "Recent activity": "最近动态", "Loading activity...": "正在加载动态...", "Sign in to see activity.": "登录后查看动态。", "No recent likes, comments, favorites, or follows.": "暂无新的点赞、评论、收藏或关注。", "liked your story": "赞了你的故事", "favorited your story": "收藏了你的故事", "commented on your story": "评论了你的故事", "started following you": "开始关注你", General: "常规", Profile: "个人资料", Preferences: "偏好设置", Appearance: "外观", "Choose a light or dark reading room.": "选择浅色或深色主题。", "Mobile navigation": "移动导航", "Choose how to open the menu on smaller screens.": "选择在小屏幕上打开菜单的方式。", "Bottom bar": "底部栏", Left: "左侧", Right: "右侧", Language: "语言", "Choose the language for the app interface.": "选择应用界面语言。", "Notification preferences": "通知偏好", "Choose which activity appears in your notifications.": "选择通知中显示的动态类型。", Likes: "点赞", Follows: "关注", Favorites: "收藏", Comments: "评论", "All types": "全部类型", "No types selected": "未选择类型", "Find your people.": "找到志同道合的人。", "Search people": "搜索用户", "Search by name or @username": "按名称或 @用户名搜索", "Readers and writers": "读者与作者", "People discovery": "发现用户", "Find more writers": "发现更多作者", "Discover people": "发现用户", "Write the first story": "写下第一个故事", Read: "阅读", Follow: "关注", "Sign out": "退出登录", "Save profile": "保存资料", "Change password": "修改密码", "Change email": "修改邮箱",
+  },
+  ar: {
+    Discover: "اكتشف", People: "الأشخاص", Following: "المتابَعون", Dashboard: "لوحة التحكم", "Write a story": "اكتب قصة", "My shelf": "مكتبتي", Settings: "الإعدادات", "Admin panel": "لوحة الإدارة", "Your space": "مساحتك", "Sign in to Flip Stories": "سجّل الدخول إلى Flip Stories", "Account settings": "إعدادات الحساب", "General settings": "الإعدادات العامة", Notifications: "الإشعارات", "Recent activity": "النشاط الأخير", "Loading activity...": "جارٍ تحميل النشاط...", "Sign in to see activity.": "سجّل الدخول لعرض النشاط.", "No recent likes, comments, favorites, or follows.": "لا توجد إعجابات أو تعليقات أو مفضلات أو متابعات حديثة.", "liked your story": "أُعجب بقصتك", "favorited your story": "أضاف قصتك إلى المفضلة", "commented on your story": "علّق على قصتك", "started following you": "بدأ بمتابعتك", General: "عام", Profile: "الملف الشخصي", Preferences: "التفضيلات", Appearance: "المظهر", "Choose a light or dark reading room.": "اختر مظهراً فاتحاً أو داكناً.", "Mobile navigation": "التنقل على الهاتف", "Choose how to open the menu on smaller screens.": "اختر طريقة فتح القائمة على الشاشات الصغيرة.", "Bottom bar": "الشريط السفلي", Left: "يسار", Right: "يمين", Language: "اللغة", "Choose the language for the app interface.": "اختر لغة واجهة التطبيق.", "Notification preferences": "تفضيلات الإشعارات", "Choose which activity appears in your notifications.": "اختر الأنشطة التي تظهر في إشعاراتك.", Likes: "الإعجابات", Follows: "المتابعات", Favorites: "المفضلة", Comments: "التعليقات", "All types": "كل الأنواع", "No types selected": "لم يتم اختيار أنواع", "Find your people.": "اعثر على مجتمعك.", "Search people": "ابحث عن أشخاص", "Search by name or @username": "ابحث بالاسم أو @اسم_المستخدم", "Readers and writers": "القراء والكتّاب", "People discovery": "اكتشاف الأشخاص", "Find more writers": "اعثر على كتّاب آخرين", "Discover people": "اكتشف أشخاصاً", "Write the first story": "اكتب القصة الأولى", Read: "اقرأ", Follow: "متابعة", "Sign out": "تسجيل الخروج", "Save profile": "حفظ الملف الشخصي", "Change password": "تغيير كلمة المرور", "Change email": "تغيير البريد الإلكتروني",
+  },
+};
+const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>> = {
+  es: {
+    "Make Flip Stories feel right for you.": "Personaliza Flip Stories a tu gusto.",
+    "Choose how the reading room looks and works on this device.": "Elige el aspecto y el funcionamiento de la aplicación en este dispositivo.",
+    Light: "Claro", Dark: "Oscuro", Library: "Biblioteca", "Join Discord": "Unirse a Discord",
+    "Your library": "Tu biblioteca", "Your stories": "Tus historias", "Saved stories": "Historias guardadas", "Made by you": "Creadas por ti", "From Discover": "De Descubrir",
+    "Stories you’ve written and stories you’ve saved.": "Historias que has escrito y guardado.", "No saved stories yet.": "Aún no tienes historias guardadas.", "Favorite stories in Discover and they’ll appear here.": "Añade historias a favoritos en Descubrir y aparecerán aquí.",
+    "Find your people.": "Encuentra a tu gente.", "Finding people...": "Buscando personas...", "No profiles to discover yet.": "Aún no hay perfiles para descubrir.", "A Flip Stories community member.": "Miembro de la comunidad Flip Stories.",
+    "Search by name or @username": "Busca por nombre o @usuario", "Search people": "Buscar personas", "Readers and writers": "Lectores y escritores",
+    "No types selected": "No hay tipos seleccionados", "All types": "Todos los tipos",
+    "The reading room": "La sala de lectura", "Stories from the community": "Historias de la comunidad", "View all": "Ver todo", "Search story titles": "Buscar títulos de historias", Genre: "Género", "Filter stories by genre": "Filtrar historias por género", "All genres": "Todos los géneros", Browse: "Explorar", "Filter stories by popularity and length": "Filtrar historias por popularidad y extensión", "All stories": "Todas las historias", Popular: "Popular", Hot: "Tendencias", "New / Recent": "Nuevas / recientes", "Short read": "Lectura breve", "Long read": "Lectura larga", "No stories match that search.": "Ninguna historia coincide con la búsqueda.", "The community": "La comunidad", "Find your": "Encuentra a tu", "people.": "gente.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Descubre escritores, conoce nuevas voces y encuentra a tu próximo narrador favorito.", people: "personas", "Search people by name or username": "Buscar personas por nombre o usuario", "Updating...": "Actualizando...", "No people found for": "No se encontraron personas para", "Close menu": "Cerrar menú", "Toggle menu": "Alternar menú", "Main navigation": "Navegación principal", "Small stories matter.": "Las historias pequeñas importan.", "Make room for yours.": "Haz espacio para la tuya.", "Open settings": "Abrir ajustes", "Sign in": "Iniciar sesión", "There are no published stories": "Aún no hay historias publicadas", "yet.": "todavía.", "Be the first person to leave something kind on the table.": "Sé la primera persona en compartir algo amable.", "A quiet place for": "Un lugar tranquilo para", "good stories.": "buenas historias.", "Pull up a chair. There’s something new to read.": "Toma asiento. Hay algo nuevo para leer.",
+  },
+  fr: {
+    "Make Flip Stories feel right for you.": "Personnalisez Flip Stories selon vos envies.",
+    "Choose how the reading room looks and works on this device.": "Choisissez l’apparence et le fonctionnement de l’application sur cet appareil.",
+    Light: "Clair", Dark: "Sombre", Library: "Bibliothèque", "Join Discord": "Rejoindre Discord",
+    "Your library": "Votre bibliothèque", "Your stories": "Vos histoires", "Saved stories": "Histoires enregistrées", "Made by you": "Créées par vous", "From Discover": "Depuis Découvrir",
+    "Stories you’ve written and stories you’ve saved.": "Les histoires que vous avez écrites et enregistrées.", "No saved stories yet.": "Aucune histoire enregistrée pour l’instant.", "Favorite stories in Discover and they’ll appear here.": "Ajoutez des histoires aux favoris dans Découvrir pour les retrouver ici.",
+    "Finding people...": "Recherche de personnes...", "No profiles to discover yet.": "Aucun profil à découvrir pour l’instant.", "A Flip Stories community member.": "Membre de la communauté Flip Stories.",
+    "The reading room": "La salle de lecture", "Stories from the community": "Histoires de la communauté", "View all": "Tout voir", "Search story titles": "Rechercher des titres d’histoires", Genre: "Genre", "Filter stories by genre": "Filtrer les histoires par genre", "All genres": "Tous les genres", Browse: "Explorer", "Filter stories by popularity and length": "Filtrer par popularité et longueur", "All stories": "Toutes les histoires", Popular: "Populaires", Hot: "Tendances", "New / Recent": "Nouvelles / récentes", "Short read": "Lecture courte", "Long read": "Lecture longue", "No stories match that search.": "Aucune histoire ne correspond à cette recherche.", "The community": "La communauté", "Find your": "Trouvez votre", "people.": "communauté.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Découvrez des auteurs, de nouvelles voix et votre prochain conteur favori.", people: "personnes", "Search people by name or username": "Rechercher par nom ou pseudo", "Updating...": "Mise à jour...", "No people found for": "Aucune personne trouvée pour", "Close menu": "Fermer le menu", "Toggle menu": "Afficher/masquer le menu", "Main navigation": "Navigation principale", "Small stories matter.": "Les petites histoires comptent.", "Make room for yours.": "Faites de la place pour la vôtre.", "Open settings": "Ouvrir les paramètres", "Sign in": "Se connecter", "There are no published stories": "Aucune histoire n’a encore été publiée", "yet.": "pour l’instant.", "Be the first person to leave something kind on the table.": "Soyez la première personne à partager quelque chose de positif.", "A quiet place for": "Un endroit calme pour", "good stories.": "de belles histoires.", "Pull up a chair. There’s something new to read.": "Installez-vous. Une nouvelle histoire vous attend.",
+  },
+  de: {
+    "Make Flip Stories feel right for you.": "Passe Flip Stories an deine Wünsche an.",
+    "Choose how the reading room looks and works on this device.": "Lege fest, wie die App auf diesem Gerät aussieht und funktioniert.",
+    Light: "Hell", Dark: "Dunkel", Library: "Bibliothek", "Join Discord": "Discord beitreten",
+    "Your library": "Deine Bibliothek", "Your stories": "Deine Geschichten", "Saved stories": "Gespeicherte Geschichten", "Made by you": "Von dir erstellt", "From Discover": "Aus Entdecken",
+    "Stories you’ve written and stories you’ve saved.": "Deine geschriebenen und gespeicherten Geschichten.", "No saved stories yet.": "Noch keine gespeicherten Geschichten.", "Favorite stories in Discover and they’ll appear here.": "Speichere Geschichten unter Entdecken, damit sie hier erscheinen.",
+    "Finding people...": "Personen werden gesucht...", "No profiles to discover yet.": "Noch keine Profile zum Entdecken.", "A Flip Stories community member.": "Mitglied der Flip-Stories-Community.",
+    "The reading room": "Der Leseraum", "Stories from the community": "Geschichten aus der Community", "View all": "Alle ansehen", "Search story titles": "Geschichtentitel suchen", Genre: "Genre", "Filter stories by genre": "Geschichten nach Genre filtern", "All genres": "Alle Genres", Browse: "Entdecken", "Filter stories by popularity and length": "Nach Beliebtheit und Länge filtern", "All stories": "Alle Geschichten", Popular: "Beliebt", Hot: "Im Trend", "New / Recent": "Neu / Kürzlich", "Short read": "Kurze Lektüre", "Long read": "Lange Lektüre", "No stories match that search.": "Keine Geschichten entsprechen dieser Suche.", "The community": "Die Community", "Find your": "Finde deine", "people.": "Leute.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Entdecke Schreibende, neue Stimmen und deine nächste Lieblingsgeschichte.", people: "Personen", "Search people by name or username": "Nach Namen oder Benutzernamen suchen", "Updating...": "Wird aktualisiert...", "No people found for": "Keine Personen gefunden für", "Close menu": "Menü schließen", "Toggle menu": "Menü umschalten", "Main navigation": "Hauptnavigation", "Small stories matter.": "Kleine Geschichten sind wichtig.", "Make room for yours.": "Mach Platz für deine.", "Open settings": "Einstellungen öffnen", "Sign in": "Anmelden", "There are no published stories": "Es wurden noch keine Geschichten veröffentlicht", "yet.": "noch nicht.", "Be the first person to leave something kind on the table.": "Teile als Erste:r etwas Schönes mit der Community.", "A quiet place for": "Ein ruhiger Ort für", "good stories.": "gute Geschichten.", "Pull up a chair. There’s something new to read.": "Mach es dir gemütlich. Es gibt etwas Neues zu lesen.",
+  },
+  pt: {
+    "Make Flip Stories feel right for you.": "Personalize o Flip Stories do seu jeito.",
+    "Choose how the reading room looks and works on this device.": "Escolha a aparência e o funcionamento do app neste dispositivo.",
+    Light: "Claro", Dark: "Escuro", Library: "Biblioteca", "Join Discord": "Entrar no Discord",
+    "Your library": "Sua biblioteca", "Your stories": "Suas histórias", "Saved stories": "Histórias salvas", "Made by you": "Criadas por você", "From Discover": "Do Descobrir",
+    "Stories you’ve written and stories you’ve saved.": "Histórias que você escreveu e salvou.", "No saved stories yet.": "Nenhuma história salva ainda.", "Favorite stories in Discover and they’ll appear here.": "Salve histórias no Descobrir para vê-las aqui.",
+    "Finding people...": "Buscando pessoas...", "No profiles to discover yet.": "Nenhum perfil para descobrir ainda.", "A Flip Stories community member.": "Membro da comunidade Flip Stories.",
+    "The reading room": "A sala de leitura", "Stories from the community": "Histórias da comunidade", "View all": "Ver tudo", "Search story titles": "Buscar títulos de histórias", Genre: "Gênero", "Filter stories by genre": "Filtrar histórias por gênero", "All genres": "Todos os gêneros", Browse: "Explorar", "Filter stories by popularity and length": "Filtrar por popularidade e tamanho", "All stories": "Todas as histórias", Popular: "Populares", Hot: "Em alta", "New / Recent": "Novas / recentes", "Short read": "Leitura curta", "Long read": "Leitura longa", "No stories match that search.": "Nenhuma história corresponde à busca.", "The community": "A comunidade", "Find your": "Encontre suas", "people.": "pessoas.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Descubra escritores, conheça novas vozes e encontre seu próximo contador de histórias favorito.", people: "pessoas", "Search people by name or username": "Buscar pessoas por nome ou usuário", "Updating...": "Atualizando...", "No people found for": "Nenhuma pessoa encontrada para", "Close menu": "Fechar menu", "Toggle menu": "Alternar menu", "Main navigation": "Navegação principal", "Small stories matter.": "Pequenas histórias importam.", "Make room for yours.": "Abra espaço para a sua.", "Open settings": "Abrir configurações", "Sign in": "Entrar", "There are no published stories": "Ainda não há histórias publicadas", "yet.": "ainda.", "Be the first person to leave something kind on the table.": "Seja a primeira pessoa a compartilhar algo gentil.", "A quiet place for": "Um lugar tranquilo para", "good stories.": "boas histórias.", "Pull up a chair. There’s something new to read.": "Sente-se. Há algo novo para ler.",
+  },
+  it: {
+    "Make Flip Stories feel right for you.": "Personalizza Flip Stories come preferisci.",
+    "Choose how the reading room looks and works on this device.": "Scegli l’aspetto e il funzionamento dell’app su questo dispositivo.",
+    Light: "Chiaro", Dark: "Scuro", Library: "Libreria", "Join Discord": "Unisciti a Discord",
+    "Your library": "La tua libreria", "Your stories": "Le tue storie", "Saved stories": "Storie salvate", "Made by you": "Create da te", "From Discover": "Da Scopri",
+    "Stories you’ve written and stories you’ve saved.": "Le storie che hai scritto e salvato.", "No saved stories yet.": "Non hai ancora storie salvate.", "Favorite stories in Discover and they’ll appear here.": "Aggiungi storie ai preferiti in Scopri per trovarle qui.",
+    "Finding people...": "Ricerca di persone...", "No profiles to discover yet.": "Nessun profilo da scoprire per ora.", "A Flip Stories community member.": "Membro della community Flip Stories.",
+    "The reading room": "La sala di lettura", "Stories from the community": "Storie della community", "View all": "Mostra tutto", "Search story titles": "Cerca i titoli delle storie", Genre: "Genere", "Filter stories by genre": "Filtra le storie per genere", "All genres": "Tutti i generi", Browse: "Esplora", "Filter stories by popularity and length": "Filtra per popolarità e lunghezza", "All stories": "Tutte le storie", Popular: "Popolari", Hot: "Di tendenza", "New / Recent": "Nuove / recenti", "Short read": "Lettura breve", "Long read": "Lettura lunga", "No stories match that search.": "Nessuna storia corrisponde alla ricerca.", "The community": "La community", "Find your": "Trova le tue", "people.": "persone.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Scopri scrittori, nuove voci e il tuo prossimo narratore preferito.", people: "persone", "Search people by name or username": "Cerca persone per nome o nome utente", "Updating...": "Aggiornamento...", "No people found for": "Nessuna persona trovata per", "Close menu": "Chiudi menu", "Toggle menu": "Apri/chiudi menu", "Main navigation": "Navigazione principale", "Small stories matter.": "Le piccole storie contano.", "Make room for yours.": "Fai spazio alla tua.", "Open settings": "Apri impostazioni", "Sign in": "Accedi", "There are no published stories": "Non ci sono ancora storie pubblicate", "yet.": "ancora.", "Be the first person to leave something kind on the table.": "Sii la prima persona a condividere qualcosa di gentile.", "A quiet place for": "Un posto tranquillo per", "good stories.": "belle storie.", "Pull up a chair. There’s something new to read.": "Accomodati. C’è qualcosa di nuovo da leggere.",
+  },
+  ja: {
+    "Make Flip Stories feel right for you.": "Flip Storiesを自分好みに設定しましょう。",
+    "Choose how the reading room looks and works on this device.": "この端末でのアプリの表示や動作を設定します。",
+    Light: "ライト", Dark: "ダーク", Library: "ライブラリ", "Join Discord": "Discordに参加",
+    "Your library": "マイライブラリ", "Your stories": "自分のストーリー", "Saved stories": "保存したストーリー", "Made by you": "自分で作成", "From Discover": "見つけるから",
+    "Stories you’ve written and stories you’ve saved.": "作成したストーリーと保存したストーリー。", "No saved stories yet.": "保存したストーリーはありません。", "Favorite stories in Discover and they’ll appear here.": "ストーリーをお気に入りに追加すると、ここに表示されます。",
+    "Finding people...": "ユーザーを検索中...", "No profiles to discover yet.": "まだユーザーがいません。", "A Flip Stories community member.": "Flip Storiesコミュニティのメンバー。",
+  },
+  ko: {
+    "Make Flip Stories feel right for you.": "Flip Stories를 원하는 대로 설정하세요.",
+    "Choose how the reading room looks and works on this device.": "이 기기에서 앱이 표시되고 작동하는 방식을 선택하세요.",
+    Light: "라이트", Dark: "다크", Library: "서재", "Join Discord": "Discord 참여",
+    "Your library": "내 서재", "Your stories": "내 스토리", "Saved stories": "저장한 스토리", "Made by you": "내가 작성함", "From Discover": "둘러보기에서",
+    "Stories you’ve written and stories you’ve saved.": "작성하거나 저장한 스토리입니다.", "No saved stories yet.": "저장한 스토리가 없습니다.", "Favorite stories in Discover and they’ll appear here.": "둘러보기에서 스토리를 즐겨찾기에 추가하면 여기에 표시됩니다.",
+    "Finding people...": "사용자 검색 중...", "No profiles to discover yet.": "아직 둘러볼 사용자가 없습니다.", "A Flip Stories community member.": "Flip Stories 커뮤니티 회원입니다.",
+    "The reading room": "이야기 공간", "Stories from the community": "커뮤니티 이야기", "View all": "모두 보기", "Search story titles": "스토리 제목 검색", Genre: "장르", "Filter stories by genre": "장르별 스토리 필터", "All genres": "모든 장르", Browse: "둘러보기", "Filter stories by popularity and length": "인기와 길이별 필터", "All stories": "모든 스토리", Popular: "인기", Hot: "인기 급상승", "New / Recent": "신규 / 최신", "Short read": "짧은 글", "Long read": "긴 글", "No stories match that search.": "검색 결과가 없습니다.", "The community": "커뮤니티", "Find your": "마음에 맞는", "people.": "사람을 찾아보세요.", "Discover writers, meet new voices, and find your next favorite storyteller.": "작가와 새로운 목소리를 만나고 좋아하는 이야기를 찾아보세요.", people: "명", "Search people by name or username": "이름 또는 사용자 이름으로 검색", "Updating...": "업데이트 중...", "No people found for": "검색된 사용자가 없습니다:", "Close menu": "메뉴 닫기", "Toggle menu": "메뉴 전환", "Main navigation": "주 메뉴", "Small stories matter.": "작은 이야기도 소중합니다.", "Make room for yours.": "당신의 이야기를 위한 자리를 만드세요.", "Open settings": "설정 열기", "Sign in": "로그인", "There are no published stories": "아직 공개된 스토리가 없습니다", "yet.": "아직.", "Be the first person to leave something kind on the table.": "따뜻한 이야기를 가장 먼저 나눠보세요.", "A quiet place for": "좋은 이야기를 위한", "good stories.": "조용한 공간.", "Pull up a chair. There’s something new to read.": "편하게 앉아 새로운 이야기를 읽어보세요.",
+  },
+  zh: {
+    "Make Flip Stories feel right for you.": "按你的喜好自定义 Flip Stories。",
+    "Choose how the reading room looks and works on this device.": "选择应用在此设备上的外观和操作方式。",
+    Light: "浅色", Dark: "深色", Library: "书架", "Join Discord": "加入 Discord",
+    "Your library": "我的书架", "Your stories": "我的故事", "Saved stories": "已收藏的故事", "Made by you": "由你创作", "From Discover": "来自发现",
+    "Stories you’ve written and stories you’ve saved.": "你创作和收藏的故事。", "No saved stories yet.": "还没有收藏的故事。", "Favorite stories in Discover and they’ll appear here.": "在发现页面收藏故事，它们就会显示在这里。",
+    "Finding people...": "正在搜索用户...", "No profiles to discover yet.": "暂时没有可发现的用户。", "A Flip Stories community member.": "Flip Stories 社区成员。",
+    "The reading room": "阅读空间", "Stories from the community": "社区故事", "View all": "查看全部", "Search story titles": "搜索故事标题", Genre: "类型", "Filter stories by genre": "按类型筛选故事", "All genres": "所有类型", Browse: "浏览", "Filter stories by popularity and length": "按热度和篇幅筛选", "All stories": "所有故事", Popular: "热门", Hot: "火热", "New / Recent": "最新", "Short read": "短篇", "Long read": "长篇", "No stories match that search.": "没有符合搜索条件的故事。", "The community": "社区", "Find your": "找到你的", "people.": "同好。", "Discover writers, meet new voices, and find your next favorite storyteller.": "发现作者、结识新声音，找到你喜欢的讲故事的人。", people: "位用户", "Search people by name or username": "按姓名或用户名搜索", "Updating...": "正在更新...", "No people found for": "未找到相关用户：", "Close menu": "关闭菜单", "Toggle menu": "切换菜单", "Main navigation": "主导航", "Small stories matter.": "小故事也很重要。", "Make room for yours.": "为你的故事留个位置。", "Open settings": "打开设置", "Sign in": "登录", "There are no published stories": "还没有已发布的故事", "yet.": "暂时。", "Be the first person to leave something kind on the table.": "来分享一段温暖的故事吧。", "A quiet place for": "一个安静的空间，", "good stories.": "留给好故事。", "Pull up a chair. There’s something new to read.": "坐下来，读读新故事吧。",
+  },
+  ar: {
+    "Make Flip Stories feel right for you.": "خصّص Flip Stories كما تحب.",
+    "Choose how the reading room looks and works on this device.": "اختر مظهر التطبيق وطريقة عمله على هذا الجهاز.",
+    Light: "فاتح", Dark: "داكن", Library: "المكتبة", "Join Discord": "انضم إلى Discord",
+    "Your library": "مكتبتي", "Your stories": "قصصك", "Saved stories": "القصص المحفوظة", "Made by you": "من تأليفك", "From Discover": "من اكتشف",
+    "Stories you’ve written and stories you’ve saved.": "القصص التي كتبتها وحفظتها.", "No saved stories yet.": "لا توجد قصص محفوظة بعد.", "Favorite stories in Discover and they’ll appear here.": "أضف القصص إلى المفضلة في اكتشف لتظهر هنا.",
+    "Finding people...": "جارٍ البحث عن أشخاص...", "No profiles to discover yet.": "لا توجد ملفات شخصية لاكتشافها بعد.", "A Flip Stories community member.": "عضو في مجتمع Flip Stories.",
+    "The reading room": "مساحة القراءة", "Stories from the community": "قصص المجتمع", "View all": "عرض الكل", "Search story titles": "ابحث عن عناوين القصص", Genre: "النوع", "Filter stories by genre": "تصفية القصص حسب النوع", "All genres": "كل الأنواع", Browse: "استكشاف", "Filter stories by popularity and length": "تصفية حسب الشعبية والطول", "All stories": "كل القصص", Popular: "الأكثر شعبية", Hot: "رائجة", "New / Recent": "حديثة", "Short read": "قراءة قصيرة", "Long read": "قراءة طويلة", "No stories match that search.": "لا توجد قصص تطابق بحثك.", "The community": "المجتمع", "Find your": "اعثر على", "people.": "أشخاص يشبهونك.", "Discover writers, meet new voices, and find your next favorite storyteller.": "اكتشف الكتّاب والأصوات الجديدة واعثر على حكّاءك المفضل التالي.", people: "أشخاص", "Search people by name or username": "ابحث بالاسم أو اسم المستخدم", "Updating...": "جارٍ التحديث...", "No people found for": "لم يتم العثور على أشخاص لـ", "Close menu": "إغلاق القائمة", "Toggle menu": "تبديل القائمة", "Main navigation": "التنقل الرئيسي", "Small stories matter.": "القصص الصغيرة مهمة.", "Make room for yours.": "اترك مساحة لقصتك.", "Open settings": "فتح الإعدادات", "Sign in": "تسجيل الدخول", "There are no published stories": "لا توجد قصص منشورة", "yet.": "حتى الآن.", "Be the first person to leave something kind on the table.": "كن أول من يشارك قصة لطيفة.", "A quiet place for": "مكان هادئ من أجل", "good stories.": "القصص الجميلة.", "Pull up a chair. There’s something new to read.": "اجلس واقرأ شيئًا جديدًا.",
+  },
+};
+const LanguageContext = createContext<Language>("en");
+function translateText(language: Language, text: string) {
+  return language === "en" ? text : TRANSLATIONS[language][text] ?? EXTRA_TRANSLATIONS[language][text] ?? text;
+}
+function useTranslate() {
+  const language = useContext(LanguageContext);
+  return (text: string) => translateText(language, text);
+}
 const PROFILE_LINK_LIMIT = 3;
 const BLOCKED_PROFILE_LINK_PATTERNS = ["nsfw", "adult", "porn", "xxx", "sex", "18+", "18plus", "onlyfans", "fetish", "lewd", "nude", "erotic"];
 const STORY_FONTS = [
@@ -309,6 +461,8 @@ export default function HomePage() {
   const [view, setView] = useState("Discover");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [mobileNavigation, setMobileNavigation] = useState<MobileNavigation>("left");
+  const [language, setLanguage] = useState<Language>("en");
+  const [notificationKinds, setNotificationKinds] = useState<NotificationKind[]>(NOTIFICATION_KINDS);
   const [themePreferenceLoaded, setThemePreferenceLoaded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [readingStory, setReadingStory] = useState<Story | null>(null);
@@ -343,6 +497,17 @@ export default function HomePage() {
       if (storedNavigation === "bottom" || storedNavigation === "left" || storedNavigation === "right") {
         setMobileNavigation(storedNavigation);
       }
+      const storedLanguage = window.localStorage.getItem("popstories-language");
+      if (LANGUAGE_OPTIONS.some((option) => option.value === storedLanguage)) {
+        setLanguage(storedLanguage as Language);
+      }
+      const storedNotificationKinds = window.localStorage.getItem("popstories-notification-kinds");
+      if (storedNotificationKinds) {
+        const parsedKinds: unknown = JSON.parse(storedNotificationKinds);
+        if (Array.isArray(parsedKinds) && parsedKinds.every((kind) => NOTIFICATION_KINDS.includes(kind))) {
+          setNotificationKinds(parsedKinds);
+        }
+      }
     } catch (error) {
       console.error("Could not read saved display preferences.", error);
     }
@@ -364,6 +529,15 @@ export default function HomePage() {
       console.error("Could not save the mobile navigation preference.", error);
     }
   }, [mobileNavigation, themePreferenceLoaded]);
+  useEffect(() => {
+    if (!themePreferenceLoaded) return;
+    try {
+      window.localStorage.setItem("popstories-language", language);
+      window.localStorage.setItem("popstories-notification-kinds", JSON.stringify(notificationKinds));
+    } catch (error) {
+      console.error("Could not save language or notification preferences.", error);
+    }
+  }, [language, notificationKinds, themePreferenceLoaded]);
   const refreshSavedState = async (userId: string | null) => {
     if (!userId) {
       setSaved([]);
@@ -680,8 +854,10 @@ export default function HomePage() {
     notify("Your story is live");
   };
 
+  const t = (text: string) => translateText(language, text);
   return (
-    <div className={`app-shell ${theme === "dark" ? "dark-mode" : ""} navigation-${mobileNavigation}`}>
+    <LanguageContext.Provider value={language}>
+    <div lang={language} dir={language === "ar" ? "rtl" : "ltr"} className={`app-shell ${theme === "dark" ? "dark-mode" : ""} navigation-${mobileNavigation}`}>
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="brand-lockup">
           <div className="brand-mark">
@@ -691,7 +867,7 @@ export default function HomePage() {
           <button
             className="sidebar-close"
             onClick={() => setMenuOpen(false)}
-            aria-label="Close menu"
+            aria-label={t("Close menu")}
           >
             <X size={18} />
           </button>
@@ -710,7 +886,7 @@ export default function HomePage() {
           </div>
           <div>
             <strong>{user ? user.email : "Sign in to Flip Stories"}</strong>
-            <span>{user ? "Account settings" : "General settings"}</span>
+            <span>{t(user ? "Account settings" : "General settings")}</span>
           </div>
           <ChevronDown size={15} />
         </button>
@@ -725,12 +901,12 @@ export default function HomePage() {
               }}
             >
               <Icon size={18} />
-              <span>{label}</span>
+              <span>{t(label)}</span>
               {label === "Following" && <span className="nav-count">{following.length}</span>}
             </button>
           ))}
         </nav>
-        <div className="nav-section-label">Your space</div>
+        <div className="nav-section-label">{t("Your space")}</div>
         <nav className="main-nav">
           <button
             className={`nav-item ${view === "Write" ? "active" : ""}`}
@@ -740,28 +916,28 @@ export default function HomePage() {
             }}
           >
             <PenLine size={18} />
-            <span>Write a story</span>
+            <span>{t("Write a story")}</span>
           </button>
           <button
             className="nav-item"
             onClick={() => { setView("Shelf"); setMenuOpen(false); }}
           >
             <Bookmark size={18} />
-            <span>My shelf</span>
+            <span>{t("My shelf")}</span>
           </button>
           <button className={`nav-item ${view === "Settings" ? "active" : ""}`} onClick={() => { setView("Settings"); setMenuOpen(false); }}>
             <Settings2 size={18} />
-            <span>Settings</span>
+            <span>{t("Settings")}</span>
           </button>
-          {user?.id === ADMIN_USER_ID && <button className={`nav-item ${view === "Admin" ? "active" : ""}`} onClick={() => { setView("Admin"); setMenuOpen(false); }}><BarChart3 size={18} /><span>Admin panel</span></button>}
+          {user?.id === ADMIN_USER_ID && <button className={`nav-item ${view === "Admin" ? "active" : ""}`} onClick={() => { setView("Admin"); setMenuOpen(false); }}><BarChart3 size={18} /><span>{t("Admin panel")}</span></button>}
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-note">
             <Sparkles size={17} />
             <p>
-              <strong>Small stories matter.</strong>
+              <strong>{t("Small stories matter.")}</strong>
               <br />
-              Make room for yours.
+              {t("Make room for yours.")}
             </p>
           </div>
         </div>
@@ -770,7 +946,7 @@ export default function HomePage() {
         <button
           className="sidebar-backdrop"
           onClick={() => setMenuOpen(false)}
-          aria-label="Close menu"
+          aria-label={t("Close menu")}
         />
       )}
       <main className="main-content">
@@ -778,15 +954,15 @@ export default function HomePage() {
           <button
             className="mobile-menu"
             onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Toggle menu"
+            aria-label={t("Toggle menu")}
             aria-expanded={menuOpen}
           >
             <Menu size={21} />
           </button>
           <div className="crumb">
-            <span>Library</span>
+            <span>{t("Library")}</span>
             <ChevronRight size={14} />
-            <strong>{view}</strong>
+            <strong>{t(view)}</strong>
           </div>
           <div className="top-actions">
             <a
@@ -796,17 +972,17 @@ export default function HomePage() {
               rel="noreferrer"
             >
               <MessageCircle size={16} />
-              <span>Join Discord</span>
+              <span>{t("Join Discord")}</span>
             </a>
             <button
               className="icon-button notification-button"
               onClick={() => setNotificationsOpen((open) => !open)}
-              aria-label="Notifications"
+              aria-label={t("Notifications")}
             >
               <Bell size={18} />
               <span />
             </button>
-            {notificationsOpen && <NotificationPanel user={user} />}
+            {notificationsOpen && <NotificationPanel user={user} selectedKinds={notificationKinds} />}
             <button className="avatar avatar-plum avatar-small" onClick={() => {
               if (user) {
                 setView("Settings");
@@ -814,7 +990,7 @@ export default function HomePage() {
                 setAuthMode("login");
                 setAuthOpen(true);
               }
-            }} aria-label={user ? "Open settings" : "Sign in"}>{user?.email?.[0]?.toUpperCase() ?? "NS"}</button>
+            }} aria-label={t(user ? "Open settings" : "Sign in")}>{user?.email?.[0]?.toUpperCase() ?? "NS"}</button>
           </div>
         </header>
         {view === "Discover" && (
@@ -862,7 +1038,7 @@ export default function HomePage() {
         {view === "Dashboard" && (
           <Dashboard onWrite={() => setView("Write")} user={user} />
         )}
-        {view === "Settings" && <SettingsView user={user} theme={theme} setTheme={setTheme} mobileNavigation={mobileNavigation} setMobileNavigation={setMobileNavigation} onSignOut={handleSignOut} onDeleted={handleAccountDeleted} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
+        {view === "Settings" && <SettingsView user={user} theme={theme} setTheme={setTheme} mobileNavigation={mobileNavigation} setMobileNavigation={setMobileNavigation} language={language} setLanguage={setLanguage} notificationKinds={notificationKinds} setNotificationKinds={setNotificationKinds} onSignOut={handleSignOut} onDeleted={handleAccountDeleted} onSaved={async () => { await loadStories(); setView("Discover"); }} />}
         {view === "PublicProfile" && publicProfileUsername && (
           <PublicProfile
             username={publicProfileUsername}
@@ -957,7 +1133,7 @@ export default function HomePage() {
               onClick={() => { setView(targetView); setMenuOpen(false); }}
             >
               <Icon size={18} />
-              <span>{label}</span>
+              <span>{t(label)}</span>
               {label === "Following" && <small>{following.length}</small>}
             </button>
           );
@@ -1004,6 +1180,7 @@ export default function HomePage() {
         </div>
       )}
     </div>
+    </LanguageContext.Provider>
   );
 }
 
@@ -1030,6 +1207,7 @@ function Discover({
   onFollow: (story: Story) => void;
   onAuthor: (username: string) => void;
 }) {
+  const t = useTranslate();
   const [searchQuery, setSearchQuery] = useState("");
   const [genreFilter, setGenreFilter] = useState("all");
   const [storyFilter, setStoryFilter] = useState("all");
@@ -1037,10 +1215,10 @@ function Discover({
   if (!stories.length) {
     return (
       <section className="content-wrap empty-feed">
-        <p className="eyebrow"><BookOpen size={14} /> The reading room</p>
-        <h1>There are no published stories <em>yet.</em></h1>
-        <p className="subtitle">Be the first person to leave something kind on the table.</p>
-        <button className="primary-button" onClick={() => setView("Write")}><PenLine size={17} /> Write the first story</button>
+        <p className="eyebrow"><BookOpen size={14} /> {t("The reading room")}</p>
+        <h1>{t("There are no published stories")} <em>{t("yet.")}</em></h1>
+        <p className="subtitle">{t("Be the first person to leave something kind on the table.")}</p>
+        <button className="primary-button" onClick={() => setView("Write")}><PenLine size={17} /> {t("Write the first story")}</button>
       </section>
     );
   }
@@ -1074,26 +1252,26 @@ function Discover({
             <Leaf size={14} /> {formatOrdinalDate()}
           </p>
           <h1>
-            A quiet place for <em>good stories.</em>
+            {t("A quiet place for")} <em>{t("good stories.")}</em>
           </h1>
           <p className="subtitle">
-            Pull up a chair. There&apos;s something new to read.
+            {t("Pull up a chair. There’s something new to read.")}
           </p>
         </div>
         <button className="primary-button" onClick={() => setView("Write")}>
-          <PenLine size={17} /> Write a story
+          <PenLine size={17} /> {t("Write a story")}
         </button>
       </div>
       <div className="section-heading">
         <div>
-          <span className="section-kicker">The reading room</span>
-          <h2>Stories from the community</h2>
+          <span className="section-kicker">{t("The reading room")}</span>
+          <h2>{t("Stories from the community")}</h2>
         </div>
         <button
           className="text-button muted-button"
           onClick={() => setView("Following")}
         >
-          View all <ChevronRight size={15} />
+          {t("View all")} <ChevronRight size={15} />
         </button>
       </div>
       <div className="discover-filters">
@@ -1102,26 +1280,26 @@ function Discover({
           <input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search story titles"
-            aria-label="Search story titles"
+            placeholder={t("Search story titles")}
+            aria-label={t("Search story titles")}
           />
         </label>
         <label className="discover-genre-filter">
-          <span>Genre</span>
-          <select value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)} aria-label="Filter stories by genre">
-            <option value="all">All genres</option>
+          <span>{t("Genre")}</span>
+          <select value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)} aria-label={t("Filter stories by genre")}>
+            <option value="all">{t("All genres")}</option>
             {GENRES.map((genre) => <option key={genre} value={genre}>{genre}</option>)}
           </select>
         </label>
         <label className="discover-genre-filter">
-          <span>Browse</span>
-          <select value={storyFilter} onChange={(event) => setStoryFilter(event.target.value)} aria-label="Filter stories by popularity and length">
-            <option value="all">All stories</option>
-            <option value="popular">Popular</option>
-            <option value="hot">Hot</option>
-            <option value="recent">New / Recent</option>
-            <option value="short">Short read</option>
-            <option value="long">Long read</option>
+          <span>{t("Browse")}</span>
+          <select value={storyFilter} onChange={(event) => setStoryFilter(event.target.value)} aria-label={t("Filter stories by popularity and length")}>
+            <option value="all">{t("All stories")}</option>
+            <option value="popular">{t("Popular")}</option>
+            <option value="hot">{t("Hot")}</option>
+            <option value="recent">{t("New / Recent")}</option>
+            <option value="short">{t("Short read")}</option>
+            <option value="long">{t("Long read")}</option>
           </select>
         </label>
       </div>
@@ -1145,7 +1323,7 @@ function Discover({
       {!filteredStories.length && (
         <div className="discover-empty-filter">
           <Search size={20} />
-          <p>No stories match that search.</p>
+          <p>{t("No stories match that search.")}</p>
         </div>
       )}
     </section>
@@ -1175,6 +1353,7 @@ function PeopleDiscovery({
   onSignIn: () => void;
   notify: (message: string) => void;
 }) {
+  const t = useTranslate();
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [profiles, setProfiles] = useState<DiscoveryProfile[]>([]);
@@ -1247,9 +1426,9 @@ function PeopleDiscovery({
     <section className="content-wrap people-discovery">
       <div className="welcome-row">
         <div>
-          <p className="eyebrow"><Users size={14} /> The community</p>
-          <h1>Find your <em>people.</em></h1>
-          <p className="subtitle">Discover writers, meet new voices, and find your next favorite storyteller.</p>
+          <p className="eyebrow"><Users size={14} /> {t("The community")}</p>
+          <h1>{t("Find your")} <em>{t("people.")}</em></h1>
+          <p className="subtitle">{t("Discover writers, meet new voices, and find your next favorite storyteller.")}</p>
         </div>
       </div>
       <div className="section-heading">
@@ -1257,7 +1436,7 @@ function PeopleDiscovery({
           <span className="section-kicker">People discovery</span>
           <h2>Readers and writers</h2>
         </div>
-        <span className="shelf-section-count">{profiles.length} people</span>
+        <span className="shelf-section-count">{profiles.length} {t("people")}</span>
       </div>
       <form className="people-search-form" onSubmit={submitSearch}>
         <label className="discover-search">
@@ -1265,14 +1444,14 @@ function PeopleDiscovery({
           <input
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Search by name or @username"
-            aria-label="Search people by name or username"
+            placeholder={t("Search by name or @username")}
+            aria-label={t("Search people by name or username")}
           />
         </label>
-        <button type="submit" className="primary-button"><Search size={16} /> Search people</button>
+        <button type="submit" className="primary-button"><Search size={16} /> {t("Search people")}</button>
       </form>
       {loading ? (
-        <p className="subtitle people-discovery-state">Finding people...</p>
+        <p className="subtitle people-discovery-state">{t("Finding people...")}</p>
       ) : error ? (
         <p className="profile-error people-discovery-state" role="alert">{error}</p>
       ) : profiles.length ? (
@@ -1293,14 +1472,14 @@ function PeopleDiscovery({
                   </span>
                   <ChevronRight size={16} />
                 </button>
-                <p>{profile.bio?.trim() || "A Flip Stories community member."}</p>
+                <p>{profile.bio?.trim() || t("A Flip Stories community member.")}</p>
                 <button
                   type="button"
                   className={`follow-chip ${isFollowing ? "following" : ""}`}
                   onClick={() => void toggleFollow(profile)}
                   disabled={followLoadingId === profile.id}
                 >
-                  {followLoadingId === profile.id ? "Updating..." : isFollowing ? "Following" : "Follow"}
+                  {followLoadingId === profile.id ? t("Updating...") : isFollowing ? t("Following") : t("Follow")}
                 </button>
               </article>
             );
@@ -1309,7 +1488,7 @@ function PeopleDiscovery({
       ) : (
         <div className="discover-empty-filter people-discovery-state">
           <Users size={20} />
-          <p>{searchQuery ? `No people found for “${searchQuery}”.` : "No profiles to discover yet."}</p>
+          <p>{searchQuery ? `${t("No people found for")} “${searchQuery}”.` : t("No profiles to discover yet.")}</p>
         </div>
       )}
     </section>
@@ -1541,7 +1720,8 @@ function FollowDirectory({ user, profileId, counts, onAuthor }: { user: User | n
   );
 }
 
-function SettingsView({ user, theme, setTheme, mobileNavigation, setMobileNavigation, onSignOut, onDeleted, onSaved }: { user: User | null; theme: "light" | "dark"; setTheme: (theme: "light" | "dark") => void; mobileNavigation: MobileNavigation; setMobileNavigation: (navigation: MobileNavigation) => void; onSignOut: () => Promise<void>; onDeleted: () => Promise<void>; onSaved: () => Promise<void> }) {
+function SettingsView({ user, theme, setTheme, mobileNavigation, setMobileNavigation, language, setLanguage, notificationKinds, setNotificationKinds, onSignOut, onDeleted, onSaved }: { user: User | null; theme: "light" | "dark"; setTheme: (theme: "light" | "dark") => void; mobileNavigation: MobileNavigation; setMobileNavigation: (navigation: MobileNavigation) => void; language: Language; setLanguage: (language: Language) => void; notificationKinds: NotificationKind[]; setNotificationKinds: (kinds: NotificationKind[]) => void; onSignOut: () => Promise<void>; onDeleted: () => Promise<void>; onSaved: () => Promise<void> }) {
+  const t = useTranslate();
   const [section, setSection] = useState<"general" | "profile">("general");
   const [profile, setProfile] = useState<Profile>({ username: "", display_name: "", bio: "", avatar_url: "", profile_links: [] });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -1747,9 +1927,9 @@ function SettingsView({ user, theme, setTheme, mobileNavigation, setMobileNaviga
     <section className="content-wrap settings-wrap">
       <div className="page-heading">
         <div>
-          <p className="eyebrow"><Settings2 size={14} /> Preferences</p>
-          <h1>Settings</h1>
-          <p className="subtitle">Make Flip Stories feel right for you.</p>
+          <p className="eyebrow"><Settings2 size={14} /> {t("Preferences")}</p>
+          <h1>{t("Settings")}</h1>
+          <p className="subtitle">{t("Make Flip Stories feel right for you.")}</p>
         </div>
         {section === "profile" && user && (
           <button
@@ -1764,46 +1944,77 @@ function SettingsView({ user, theme, setTheme, mobileNavigation, setMobileNaviga
       </div>
       <div className="settings-tabs" role="tablist" aria-label="Settings sections">
         <button type="button" role="tab" aria-selected={section === "general"} className={section === "general" ? "active" : ""} onClick={() => setSection("general")}>
-          <Settings2 size={16} /> General
+        <Settings2 size={16} /> {t("General")}
         </button>
         {user && (
           <button type="button" role="tab" aria-selected={section === "profile"} className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}>
-            <Users size={16} /> Profile
+            <Users size={16} /> {t("Profile")}
           </button>
         )}
       </div>
       {section === "general" && (
         <section className="settings-section" role="tabpanel" aria-label="General settings">
           <div className="settings-section-heading">
-            <div><span className="section-kicker">Preferences</span><h2>General</h2></div>
-            <p>Choose how the reading room looks and works on this device.</p>
+            <div><span className="section-kicker">{t("Preferences")}</span><h2>{t("General")}</h2></div>
+            <p>{t("Choose how the reading room looks and works on this device.")}</p>
           </div>
           <div className="settings-option">
             <span className="settings-option-icon">{theme === "dark" ? <Moon size={18} /> : <Sun size={18} />}</span>
-            <span className="settings-option-copy"><strong>Appearance</strong><small>Choose a light or dark reading room.</small></span>
+            <span className="settings-option-copy"><strong>{t("Appearance")}</strong><small>{t("Choose a light or dark reading room.")}</small></span>
             <span className="appearance-choice">
               <button type="button" className={theme === "light" ? "selected" : ""} aria-pressed={theme === "light"} onClick={() => setTheme("light")}>
-                <Sun size={15} /> Light
+                <Sun size={15} /> {t("Light")}
               </button>
               <button type="button" className={theme === "dark" ? "selected" : ""} aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>
-                <Moon size={15} /> Dark
+                <Moon size={15} /> {t("Dark")}
               </button>
             </span>
           </div>
           <div className="settings-option settings-navigation-option">
             <span className="settings-option-icon"><Menu size={18} /></span>
-            <span className="settings-option-copy"><strong>Mobile navigation</strong><small>Choose how to open the menu on smaller screens.</small></span>
+            <span className="settings-option-copy"><strong>{t("Mobile navigation")}</strong><small>{t("Choose how to open the menu on smaller screens.")}</small></span>
             <span className="navigation-choice" role="group" aria-label="Mobile navigation style">
               <button type="button" className={mobileNavigation === "bottom" ? "selected" : ""} aria-pressed={mobileNavigation === "bottom"} onClick={() => setMobileNavigation("bottom")}>
-                <ChevronDown size={15} /> Bottom bar
+                <ChevronDown size={15} /> {t("Bottom bar")}
               </button>
               <button type="button" className={mobileNavigation === "left" ? "selected" : ""} aria-pressed={mobileNavigation === "left"} onClick={() => setMobileNavigation("left")}>
-                <ChevronLeft size={15} /> Left
+                <ChevronLeft size={15} /> {t("Left")}
               </button>
               <button type="button" className={mobileNavigation === "right" ? "selected" : ""} aria-pressed={mobileNavigation === "right"} onClick={() => setMobileNavigation("right")}>
-                <ChevronRight size={15} /> Right
+                <ChevronRight size={15} /> {t("Right")}
               </button>
             </span>
+          </div>
+          <div className="settings-option">
+            <span className="settings-option-icon"><Languages size={18} /></span>
+            <span className="settings-option-copy"><strong>{t("Language")}</strong><small>{t("Choose the language for the app interface.")}</small></span>
+            <label className="settings-select-wrap">
+              <span className="sr-only">{t("Language")}</span>
+              <select value={language} onChange={(event) => setLanguage(event.target.value as Language)}>
+                {LANGUAGE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="settings-option settings-notification-option">
+            <span className="settings-option-icon"><Bell size={18} /></span>
+            <span className="settings-option-copy"><strong>{t("Notification preferences")}</strong><small>{t("Choose which activity appears in your notifications.")}</small></span>
+            <details className="notification-preference-dropdown">
+              <summary aria-label={t("Notification preferences")}>{notificationSelectionLabel(notificationKinds, t)} <ChevronDown size={14} /></summary>
+              <div className="notification-preference-menu">
+                {NOTIFICATION_KINDS.map((kind) => (
+                  <label key={kind}>
+                    <input
+                      type="checkbox"
+                      checked={notificationKinds.includes(kind)}
+                      onChange={(event) => setNotificationKinds(event.target.checked
+                        ? [...notificationKinds, kind]
+                        : notificationKinds.filter((selected) => selected !== kind))}
+                    />
+                    <span>{t(notificationKindLabel(kind))}</span>
+                  </label>
+                ))}
+              </div>
+            </details>
           </div>
         </section>
       )}
@@ -2001,7 +2212,9 @@ function PublicProfile({
   return <section className="content-wrap public-profile-wrap"><button className="text-button" onClick={onBack}><ChevronLeft size={15} /> Back to Discover</button><div className="public-profile-header">{profile.avatar_url ? <img className="public-avatar" src={profile.avatar_url} alt="" /> : <div className="avatar avatar-plum avatar-large">{profile.display_name.slice(0, 2).toUpperCase()}</div>}<div><h1>{profile.display_name}</h1><p>@{profile.username}</p>{profile.bio && <span>{profile.bio}</span>}{profile.profile_links.length ? <div className="profile-link-list">{profile.profile_links.map((link) => { const hostname = new URL(link).hostname.replace(/^www\./, ""); return <a key={link} className="profile-link" href={link} target="_blank" rel="noreferrer noopener">{hostname}</a>; })}</div> : null}</div>{user?.id !== profile.id ? <button className="primary-button" onClick={() => void toggleProfileFollow()} disabled={loadingFollow}>{loadingFollow ? "Updating..." : isFollowing ? "Following" : "Follow"}</button> : null}</div><FollowDirectory user={user} profileId={profile.id} counts={followCounts} onAuthor={onAuthor} /><div className="section-heading"><div><span className="section-kicker">Published stories</span><h2>From {profile.display_name}</h2></div></div>{stories.length ? <div className="story-list">{stories.map((story) => <StoryCard key={story.id} story={story} liked={false} saved={false} following={isFollowing} onLike={() => {}} onSave={() => {}} onFollow={() => void toggleProfileFollow()} onRead={() => onRead(story)} onAuthor={() => {}} onMention={onAuthor} />)}</div> : <p className="subtitle">No public stories yet.</p>}</section>;
 }
 
-function NotificationPanel({ user }: { user: User | null }) {
+function NotificationPanel({ user, selectedKinds }: { user: User | null; selectedKinds: NotificationKind[] }) {
+  const t = useTranslate();
+  const language = useContext(LanguageContext);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -2091,29 +2304,30 @@ function NotificationPanel({ user }: { user: User | null }) {
   }, [user]);
 
   const descriptions: Record<NotificationItem["kind"], string> = {
-    like: "liked your story",
-    favorite: "favorited your story",
-    comment: "commented on your story",
-    follow: "started following you",
+    like: t("liked your story"),
+    favorite: t("favorited your story"),
+    comment: t("commented on your story"),
+    follow: t("started following you"),
   };
+  const visibleItems = items.filter((item) => selectedKinds.includes(item.kind));
 
   return (
     <div className="notification-panel">
       <div className="notification-panel-header">
-        <strong>Recent activity</strong>
-        <span>{items.length} / 50</span>
+        <strong>{t("Recent activity")}</strong>
+        <span>{visibleItems.length} / 50</span>
       </div>
       {loading ? (
-        <p className="notification-empty">Loading activity...</p>
+        <p className="notification-empty">{t("Loading activity...")}</p>
       ) : !user ? (
-        <p className="notification-empty">Sign in to see activity.</p>
+        <p className="notification-empty">{t("Sign in to see activity.")}</p>
       ) : loadError ? (
         <p className="notification-empty">{loadError}</p>
-      ) : !items.length ? (
-        <p className="notification-empty">No recent likes, comments, favorites, or follows.</p>
+      ) : !visibleItems.length ? (
+        <p className="notification-empty">{t(selectedKinds.length ? "No recent likes, comments, favorites, or follows." : "No types selected")}</p>
       ) : (
         <div className="notification-list">
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <div className="notification-item" key={item.id}>
               <span className="notification-avatar">
                 {item.actorAvatar ? <img src={item.actorAvatar} alt="" /> : item.actor.slice(0, 2).toUpperCase()}
@@ -2122,7 +2336,7 @@ function NotificationPanel({ user }: { user: User | null }) {
                 <strong>{item.actor}</strong> {descriptions[item.kind]}
                 {item.storyTitle && <> <em>{item.storyTitle}</em></>}
                 {item.detail && <span className="notification-detail">“{item.detail}”</span>}
-                <small>{new Date(item.createdAt).toLocaleString()}</small>
+                <small>{new Date(item.createdAt).toLocaleString(LOCALE_BY_LANGUAGE[language])}</small>
               </p>
             </div>
           ))}
