@@ -296,6 +296,7 @@ const GENRES = [
 ];
 const navItems = [
   { label: "Discover", icon: Home },
+  { label: "People", icon: Search },
   { label: "Following", icon: Users },
   { label: "Dashboard", icon: BarChart3 },
 ];
@@ -821,6 +822,16 @@ export default function HomePage() {
             onAuthor={(username) => { setPublicProfileUsername(username); setView("PublicProfile"); }}
           />
         )}
+        {view === "People" && (
+          <PeopleDiscovery
+            user={user}
+            following={following}
+            onAuthor={(username) => { setPublicProfileUsername(username); setView("PublicProfile"); }}
+            onFollowUpdated={() => refreshFollowingState(user?.id ?? null)}
+            onSignIn={() => { setAuthMode("login"); setAuthOpen(true); }}
+            notify={notify}
+          />
+        )}
         {view === "Following" && (
           <FollowingView
             setView={setView}
@@ -920,6 +931,7 @@ export default function HomePage() {
       <nav className="mobile-bottom-nav" aria-label="Bottom navigation">
         {[
           { label: "Discover", icon: Home, view: "Discover" },
+          { label: "People", icon: Search, view: "People" },
           { label: "Following", icon: Users, view: "Following" },
           { label: "Dashboard", icon: BarChart3, view: "Dashboard" },
           { label: "Write", icon: PenLine, view: "Write" },
@@ -1131,6 +1143,170 @@ function Discover({
   );
 }
 
+type DiscoveryProfile = {
+  id: string;
+  username: string;
+  display_name: string;
+  bio: string | null;
+  avatar_url: string | null;
+};
+
+function PeopleDiscovery({
+  user,
+  following,
+  onAuthor,
+  onFollowUpdated,
+  onSignIn,
+  notify,
+}: {
+  user: User | null;
+  following: string[];
+  onAuthor: (username: string) => void;
+  onFollowUpdated: () => Promise<void>;
+  onSignIn: () => void;
+  notify: (message: string) => void;
+}) {
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [profiles, setProfiles] = useState<DiscoveryProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadProfiles = async () => {
+      setLoading(true);
+      setError("");
+      const query = searchQuery.trim().replace(/^@+/, "");
+      const requests = query
+        ? [
+            supabase.from("profiles").select("id,username,display_name,bio,avatar_url").ilike("username", `%${query}%`).order("username").limit(50),
+            supabase.from("profiles").select("id,username,display_name,bio,avatar_url").ilike("display_name", `%${query}%`).order("display_name").limit(50),
+          ]
+        : [
+            supabase.from("profiles").select("id,username,display_name,bio,avatar_url").order("display_name").limit(50),
+          ];
+      const results = await Promise.all(requests);
+      const resultError = results.find((result) => result.error)?.error;
+      if (!active) return;
+      if (resultError) {
+        console.error("Could not load people discovery profiles.", resultError);
+        setError(`Could not load profiles: ${resultError.message}`);
+        setProfiles([]);
+        setLoading(false);
+        return;
+      }
+      const profileById = new Map<string, DiscoveryProfile>();
+      results.forEach((result) => {
+        (result.data ?? []).forEach((profile: DiscoveryProfile) => {
+          if (profile.id !== user?.id) profileById.set(profile.id, profile);
+        });
+      });
+      setProfiles([...profileById.values()]);
+      setLoading(false);
+    };
+    void loadProfiles();
+    return () => { active = false; };
+  }, [searchQuery, user?.id]);
+
+  const toggleFollow = async (profile: DiscoveryProfile) => {
+    if (!user) {
+      onSignIn();
+      return;
+    }
+    const isFollowing = following.includes(profile.id);
+    setFollowLoadingId(profile.id);
+    const result = isFollowing
+      ? await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profile.id)
+      : await supabase.from("follows").insert({ follower_id: user.id, following_id: profile.id });
+    if (result.error) {
+      notify(result.error.message);
+      setFollowLoadingId(null);
+      return;
+    }
+    await onFollowUpdated();
+    setFollowLoadingId(null);
+  };
+
+  const submitSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSearchQuery(searchInput.trim());
+  };
+
+  return (
+    <section className="content-wrap people-discovery">
+      <div className="welcome-row">
+        <div>
+          <p className="eyebrow"><Users size={14} /> The community</p>
+          <h1>Find your <em>people.</em></h1>
+          <p className="subtitle">Discover writers, meet new voices, and find your next favorite storyteller.</p>
+        </div>
+      </div>
+      <div className="section-heading">
+        <div>
+          <span className="section-kicker">People discovery</span>
+          <h2>Readers and writers</h2>
+        </div>
+        <span className="shelf-section-count">{profiles.length} people</span>
+      </div>
+      <form className="people-search-form" onSubmit={submitSearch}>
+        <label className="discover-search">
+          <Search size={17} />
+          <input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search by name or @username"
+            aria-label="Search people by name or username"
+          />
+        </label>
+        <button type="submit" className="primary-button"><Search size={16} /> Search people</button>
+      </form>
+      {loading ? (
+        <p className="subtitle people-discovery-state">Finding people...</p>
+      ) : error ? (
+        <p className="profile-error people-discovery-state" role="alert">{error}</p>
+      ) : profiles.length ? (
+        <div className="discovered-people-grid">
+          {profiles.map((profile) => {
+            const isFollowing = following.includes(profile.id);
+            return (
+              <article className="discovered-person-card" key={profile.id}>
+                <button type="button" className="discovered-person-main" onClick={() => onAuthor(profile.username)}>
+                  <span className="discovered-person-avatar">
+                    {profile.avatar_url
+                      ? <img src={profile.avatar_url} alt="" />
+                      : profile.display_name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span className="discovered-person-copy">
+                    <strong>{profile.display_name}</strong>
+                    <small>@{profile.username}</small>
+                  </span>
+                  <ChevronRight size={16} />
+                </button>
+                <p>{profile.bio?.trim() || "A Flip Stories community member."}</p>
+                <button
+                  type="button"
+                  className={`follow-chip ${isFollowing ? "following" : ""}`}
+                  onClick={() => void toggleFollow(profile)}
+                  disabled={followLoadingId === profile.id}
+                >
+                  {followLoadingId === profile.id ? "Updating..." : isFollowing ? "Following" : "Follow"}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="discover-empty-filter people-discovery-state">
+          <Users size={20} />
+          <p>{searchQuery ? `No people found for “${searchQuery}”.` : "No profiles to discover yet."}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function FollowingView({
   setView,
   user,
@@ -1198,6 +1374,9 @@ function FollowingView({
         </span>
         <button className="text-button" onClick={() => setView("Discover")}>
           Find more writers <ChevronRight size={15} />
+        </button>
+        <button className="text-button" onClick={() => setView("People")}>
+          Discover people <ChevronRight size={15} />
         </button>
       </div>
       <FollowDirectory user={user} onAuthor={onAuthor} />
