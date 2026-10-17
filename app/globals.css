@@ -99,14 +99,18 @@
 .story-card-bottom { margin-top:20px; }
 .shelf-wrap { max-width:1050px; min-width:0; }
 .shelf-section { min-width:0; }
-.shelf-wrap .story-list,.shelf-wrap .story-card,.shelf-wrap .story-card-main { min-width:0; }
+.shelf-wrap .story-list { width:100%; min-width:0; }
+.shelf-wrap .story-card,.shelf-wrap .story-card-main { width:100%; min-width:0; }
 .shelf-wrap .story-card h3,.shelf-wrap .story-card p { overflow-wrap:anywhere; }
+.shelf-wrap .story-card-meta { min-width:0; flex-wrap:wrap; gap:6px 12px; }
+.shelf-wrap .story-card-bottom { min-width:0; flex-wrap:wrap; }
+.shelf-wrap .story-actions { flex-wrap:wrap; }
 .shelf-section + .shelf-section { margin-top:46px; }
 .shelf-section-count { color:var(--faint); font-size:11px; }
 .shelf-list { display:grid; gap:12px; }
-.shelf-row { display:flex; align-items:center; justify-content:space-between; gap:22px; padding:20px 22px; border:1px solid var(--line); border-radius:10px; background:var(--raised); }
+.shelf-row { display:flex; width:100%; min-width:0; max-width:100%; align-items:center; justify-content:space-between; gap:22px; padding:20px 22px; border:1px solid var(--line); border-radius:10px; background:var(--raised); }
 .shelf-row-copy { min-width:0; }
-.shelf-row h2 { margin:9px 0 5px; font-family:"Libre Baskerville",serif; font-size:19px; font-weight:400; }
+.shelf-row h2 { margin:9px 0 5px; overflow-wrap:anywhere; font-family:"Libre Baskerville",serif; font-size:19px; font-weight:400; }
 .shelf-row p { max-width:650px; margin:0 0 9px; overflow:hidden; color:var(--muted); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
 .shelf-row small { color:var(--faint); font-size:9px; }
 .shelf-row-actions { display:flex; flex:0 0 auto; gap:8px; }
