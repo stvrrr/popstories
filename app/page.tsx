@@ -135,6 +135,7 @@ const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>
     "Search by name or @username": "Busca por nombre o @usuario", "Search people": "Buscar personas", "Readers and writers": "Lectores y escritores",
     "No types selected": "No hay tipos seleccionados", "All types": "Todos los tipos",
     "The reading room": "La sala de lectura", "Stories from the community": "Historias de la comunidad", "View all": "Ver todo", "Search story titles": "Buscar títulos de historias", Genre: "Género", "Filter stories by genre": "Filtrar historias por género", "All genres": "Todos los géneros", Browse: "Explorar", "Filter stories by popularity and length": "Filtrar historias por popularidad y extensión", "All stories": "Todas las historias", Popular: "Popular", Hot: "Tendencias", "New / Recent": "Nuevas / recientes", "Short read": "Lectura breve", "Long read": "Lectura larga", "No stories match that search.": "Ninguna historia coincide con la búsqueda.", "The community": "La comunidad", "Find your": "Encuentra a tu", "people.": "gente.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Descubre escritores, conoce nuevas voces y encuentra a tu próximo narrador favorito.", people: "personas", "Search people by name or username": "Buscar personas por nombre o usuario", "Updating...": "Actualizando...", "No people found for": "No se encontraron personas para", "Close menu": "Cerrar menú", "Toggle menu": "Alternar menú", "Main navigation": "Navegación principal", "Small stories matter.": "Las historias pequeñas importan.", "Make room for yours.": "Haz espacio para la tuya.", "Open settings": "Abrir ajustes", "Sign in": "Iniciar sesión", "There are no published stories": "Aún no hay historias publicadas", "yet.": "todavía.", "Be the first person to leave something kind on the table.": "Sé la primera persona en compartir algo amable.", "A quiet place for": "Un lugar tranquilo para", "good stories.": "buenas historias.", "Pull up a chair. There’s something new to read.": "Toma asiento. Hay algo nuevo para leer.",
+    English: "Inglés", Translate: "Traducir", "Hide translation": "Ocultar traducción", "Translating...": "Traduciendo...",
   },
   fr: {
     "Make Flip Stories feel right for you.": "Personnalisez Flip Stories selon vos envies.",
@@ -144,6 +145,7 @@ const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>
     "Stories you’ve written and stories you’ve saved.": "Les histoires que vous avez écrites et enregistrées.", "No saved stories yet.": "Aucune histoire enregistrée pour l’instant.", "Favorite stories in Discover and they’ll appear here.": "Ajoutez des histoires aux favoris dans Découvrir pour les retrouver ici.",
     "Finding people...": "Recherche de personnes...", "No profiles to discover yet.": "Aucun profil à découvrir pour l’instant.", "A Flip Stories community member.": "Membre de la communauté Flip Stories.",
     "The reading room": "La salle de lecture", "Stories from the community": "Histoires de la communauté", "View all": "Tout voir", "Search story titles": "Rechercher des titres d’histoires", Genre: "Genre", "Filter stories by genre": "Filtrer les histoires par genre", "All genres": "Tous les genres", Browse: "Explorer", "Filter stories by popularity and length": "Filtrer par popularité et longueur", "All stories": "Toutes les histoires", Popular: "Populaires", Hot: "Tendances", "New / Recent": "Nouvelles / récentes", "Short read": "Lecture courte", "Long read": "Lecture longue", "No stories match that search.": "Aucune histoire ne correspond à cette recherche.", "The community": "La communauté", "Find your": "Trouvez votre", "people.": "communauté.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Découvrez des auteurs, de nouvelles voix et votre prochain conteur favori.", people: "personnes", "Search people by name or username": "Rechercher par nom ou pseudo", "Updating...": "Mise à jour...", "No people found for": "Aucune personne trouvée pour", "Close menu": "Fermer le menu", "Toggle menu": "Afficher/masquer le menu", "Main navigation": "Navigation principale", "Small stories matter.": "Les petites histoires comptent.", "Make room for yours.": "Faites de la place pour la vôtre.", "Open settings": "Ouvrir les paramètres", "Sign in": "Se connecter", "There are no published stories": "Aucune histoire n’a encore été publiée", "yet.": "pour l’instant.", "Be the first person to leave something kind on the table.": "Soyez la première personne à partager quelque chose de positif.", "A quiet place for": "Un endroit calme pour", "good stories.": "de belles histoires.", "Pull up a chair. There’s something new to read.": "Installez-vous. Une nouvelle histoire vous attend.",
+    English: "Anglais", Translate: "Traduire", "Hide translation": "Masquer la traduction", "Translating...": "Traduction en cours...",
   },
   de: {
     "Make Flip Stories feel right for you.": "Passe Flip Stories an deine Wünsche an.",
@@ -153,6 +155,7 @@ const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>
     "Stories you’ve written and stories you’ve saved.": "Deine geschriebenen und gespeicherten Geschichten.", "No saved stories yet.": "Noch keine gespeicherten Geschichten.", "Favorite stories in Discover and they’ll appear here.": "Speichere Geschichten unter Entdecken, damit sie hier erscheinen.",
     "Finding people...": "Personen werden gesucht...", "No profiles to discover yet.": "Noch keine Profile zum Entdecken.", "A Flip Stories community member.": "Mitglied der Flip-Stories-Community.",
     "The reading room": "Der Leseraum", "Stories from the community": "Geschichten aus der Community", "View all": "Alle ansehen", "Search story titles": "Geschichtentitel suchen", Genre: "Genre", "Filter stories by genre": "Geschichten nach Genre filtern", "All genres": "Alle Genres", Browse: "Entdecken", "Filter stories by popularity and length": "Nach Beliebtheit und Länge filtern", "All stories": "Alle Geschichten", Popular: "Beliebt", Hot: "Im Trend", "New / Recent": "Neu / Kürzlich", "Short read": "Kurze Lektüre", "Long read": "Lange Lektüre", "No stories match that search.": "Keine Geschichten entsprechen dieser Suche.", "The community": "Die Community", "Find your": "Finde deine", "people.": "Leute.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Entdecke Schreibende, neue Stimmen und deine nächste Lieblingsgeschichte.", people: "Personen", "Search people by name or username": "Nach Namen oder Benutzernamen suchen", "Updating...": "Wird aktualisiert...", "No people found for": "Keine Personen gefunden für", "Close menu": "Menü schließen", "Toggle menu": "Menü umschalten", "Main navigation": "Hauptnavigation", "Small stories matter.": "Kleine Geschichten sind wichtig.", "Make room for yours.": "Mach Platz für deine.", "Open settings": "Einstellungen öffnen", "Sign in": "Anmelden", "There are no published stories": "Es wurden noch keine Geschichten veröffentlicht", "yet.": "noch nicht.", "Be the first person to leave something kind on the table.": "Teile als Erste:r etwas Schönes mit der Community.", "A quiet place for": "Ein ruhiger Ort für", "good stories.": "gute Geschichten.", "Pull up a chair. There’s something new to read.": "Mach es dir gemütlich. Es gibt etwas Neues zu lesen.",
+    English: "Englisch", Translate: "Übersetzen", "Hide translation": "Übersetzung ausblenden", "Translating...": "Übersetzung läuft...",
   },
   pt: {
     "Make Flip Stories feel right for you.": "Personalize o Flip Stories do seu jeito.",
@@ -162,6 +165,7 @@ const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>
     "Stories you’ve written and stories you’ve saved.": "Histórias que você escreveu e salvou.", "No saved stories yet.": "Nenhuma história salva ainda.", "Favorite stories in Discover and they’ll appear here.": "Salve histórias no Descobrir para vê-las aqui.",
     "Finding people...": "Buscando pessoas...", "No profiles to discover yet.": "Nenhum perfil para descobrir ainda.", "A Flip Stories community member.": "Membro da comunidade Flip Stories.",
     "The reading room": "A sala de leitura", "Stories from the community": "Histórias da comunidade", "View all": "Ver tudo", "Search story titles": "Buscar títulos de histórias", Genre: "Gênero", "Filter stories by genre": "Filtrar histórias por gênero", "All genres": "Todos os gêneros", Browse: "Explorar", "Filter stories by popularity and length": "Filtrar por popularidade e tamanho", "All stories": "Todas as histórias", Popular: "Populares", Hot: "Em alta", "New / Recent": "Novas / recentes", "Short read": "Leitura curta", "Long read": "Leitura longa", "No stories match that search.": "Nenhuma história corresponde à busca.", "The community": "A comunidade", "Find your": "Encontre suas", "people.": "pessoas.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Descubra escritores, conheça novas vozes e encontre seu próximo contador de histórias favorito.", people: "pessoas", "Search people by name or username": "Buscar pessoas por nome ou usuário", "Updating...": "Atualizando...", "No people found for": "Nenhuma pessoa encontrada para", "Close menu": "Fechar menu", "Toggle menu": "Alternar menu", "Main navigation": "Navegação principal", "Small stories matter.": "Pequenas histórias importam.", "Make room for yours.": "Abra espaço para a sua.", "Open settings": "Abrir configurações", "Sign in": "Entrar", "There are no published stories": "Ainda não há histórias publicadas", "yet.": "ainda.", "Be the first person to leave something kind on the table.": "Seja a primeira pessoa a compartilhar algo gentil.", "A quiet place for": "Um lugar tranquilo para", "good stories.": "boas histórias.", "Pull up a chair. There’s something new to read.": "Sente-se. Há algo novo para ler.",
+    English: "Inglês", Translate: "Traduzir", "Hide translation": "Ocultar tradução", "Translating...": "Traduzindo...",
   },
   it: {
     "Make Flip Stories feel right for you.": "Personalizza Flip Stories come preferisci.",
@@ -171,6 +175,7 @@ const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>
     "Stories you’ve written and stories you’ve saved.": "Le storie che hai scritto e salvato.", "No saved stories yet.": "Non hai ancora storie salvate.", "Favorite stories in Discover and they’ll appear here.": "Aggiungi storie ai preferiti in Scopri per trovarle qui.",
     "Finding people...": "Ricerca di persone...", "No profiles to discover yet.": "Nessun profilo da scoprire per ora.", "A Flip Stories community member.": "Membro della community Flip Stories.",
     "The reading room": "La sala di lettura", "Stories from the community": "Storie della community", "View all": "Mostra tutto", "Search story titles": "Cerca i titoli delle storie", Genre: "Genere", "Filter stories by genre": "Filtra le storie per genere", "All genres": "Tutti i generi", Browse: "Esplora", "Filter stories by popularity and length": "Filtra per popolarità e lunghezza", "All stories": "Tutte le storie", Popular: "Popolari", Hot: "Di tendenza", "New / Recent": "Nuove / recenti", "Short read": "Lettura breve", "Long read": "Lettura lunga", "No stories match that search.": "Nessuna storia corrisponde alla ricerca.", "The community": "La community", "Find your": "Trova le tue", "people.": "persone.", "Discover writers, meet new voices, and find your next favorite storyteller.": "Scopri scrittori, nuove voci e il tuo prossimo narratore preferito.", people: "persone", "Search people by name or username": "Cerca persone per nome o nome utente", "Updating...": "Aggiornamento...", "No people found for": "Nessuna persona trovata per", "Close menu": "Chiudi menu", "Toggle menu": "Apri/chiudi menu", "Main navigation": "Navigazione principale", "Small stories matter.": "Le piccole storie contano.", "Make room for yours.": "Fai spazio alla tua.", "Open settings": "Apri impostazioni", "Sign in": "Accedi", "There are no published stories": "Non ci sono ancora storie pubblicate", "yet.": "ancora.", "Be the first person to leave something kind on the table.": "Sii la prima persona a condividere qualcosa di gentile.", "A quiet place for": "Un posto tranquillo per", "good stories.": "belle storie.", "Pull up a chair. There’s something new to read.": "Accomodati. C’è qualcosa di nuovo da leggere.",
+    English: "Inglese", Translate: "Traduci", "Hide translation": "Nascondi traduzione", "Translating...": "Traduzione in corso...",
   },
   ja: {
     "Make Flip Stories feel right for you.": "Flip Storiesを自分好みに設定しましょう。",
@@ -179,6 +184,7 @@ const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>
     "Your library": "マイライブラリ", "Your stories": "自分のストーリー", "Saved stories": "保存したストーリー", "Made by you": "自分で作成", "From Discover": "見つけるから",
     "Stories you’ve written and stories you’ve saved.": "作成したストーリーと保存したストーリー。", "No saved stories yet.": "保存したストーリーはありません。", "Favorite stories in Discover and they’ll appear here.": "ストーリーをお気に入りに追加すると、ここに表示されます。",
     "Finding people...": "ユーザーを検索中...", "No profiles to discover yet.": "まだユーザーがいません。", "A Flip Stories community member.": "Flip Storiesコミュニティのメンバー。",
+    English: "英語", Translate: "翻訳", "Hide translation": "翻訳を隠す", "Translating...": "翻訳中...",
   },
   ko: {
     "Make Flip Stories feel right for you.": "Flip Stories를 원하는 대로 설정하세요.",
@@ -188,6 +194,7 @@ const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>
     "Stories you’ve written and stories you’ve saved.": "작성하거나 저장한 스토리입니다.", "No saved stories yet.": "저장한 스토리가 없습니다.", "Favorite stories in Discover and they’ll appear here.": "둘러보기에서 스토리를 즐겨찾기에 추가하면 여기에 표시됩니다.",
     "Finding people...": "사용자 검색 중...", "No profiles to discover yet.": "아직 둘러볼 사용자가 없습니다.", "A Flip Stories community member.": "Flip Stories 커뮤니티 회원입니다.",
     "The reading room": "이야기 공간", "Stories from the community": "커뮤니티 이야기", "View all": "모두 보기", "Search story titles": "스토리 제목 검색", Genre: "장르", "Filter stories by genre": "장르별 스토리 필터", "All genres": "모든 장르", Browse: "둘러보기", "Filter stories by popularity and length": "인기와 길이별 필터", "All stories": "모든 스토리", Popular: "인기", Hot: "인기 급상승", "New / Recent": "신규 / 최신", "Short read": "짧은 글", "Long read": "긴 글", "No stories match that search.": "검색 결과가 없습니다.", "The community": "커뮤니티", "Find your": "마음에 맞는", "people.": "사람을 찾아보세요.", "Discover writers, meet new voices, and find your next favorite storyteller.": "작가와 새로운 목소리를 만나고 좋아하는 이야기를 찾아보세요.", people: "명", "Search people by name or username": "이름 또는 사용자 이름으로 검색", "Updating...": "업데이트 중...", "No people found for": "검색된 사용자가 없습니다:", "Close menu": "메뉴 닫기", "Toggle menu": "메뉴 전환", "Main navigation": "주 메뉴", "Small stories matter.": "작은 이야기도 소중합니다.", "Make room for yours.": "당신의 이야기를 위한 자리를 만드세요.", "Open settings": "설정 열기", "Sign in": "로그인", "There are no published stories": "아직 공개된 스토리가 없습니다", "yet.": "아직.", "Be the first person to leave something kind on the table.": "따뜻한 이야기를 가장 먼저 나눠보세요.", "A quiet place for": "좋은 이야기를 위한", "good stories.": "조용한 공간.", "Pull up a chair. There’s something new to read.": "편하게 앉아 새로운 이야기를 읽어보세요.",
+    English: "영어", Translate: "번역", "Hide translation": "번역 숨기기", "Translating...": "번역 중...",
   },
   zh: {
     "Make Flip Stories feel right for you.": "按你的喜好自定义 Flip Stories。",
@@ -197,6 +204,7 @@ const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>
     "Stories you’ve written and stories you’ve saved.": "你创作和收藏的故事。", "No saved stories yet.": "还没有收藏的故事。", "Favorite stories in Discover and they’ll appear here.": "在发现页面收藏故事，它们就会显示在这里。",
     "Finding people...": "正在搜索用户...", "No profiles to discover yet.": "暂时没有可发现的用户。", "A Flip Stories community member.": "Flip Stories 社区成员。",
     "The reading room": "阅读空间", "Stories from the community": "社区故事", "View all": "查看全部", "Search story titles": "搜索故事标题", Genre: "类型", "Filter stories by genre": "按类型筛选故事", "All genres": "所有类型", Browse: "浏览", "Filter stories by popularity and length": "按热度和篇幅筛选", "All stories": "所有故事", Popular: "热门", Hot: "火热", "New / Recent": "最新", "Short read": "短篇", "Long read": "长篇", "No stories match that search.": "没有符合搜索条件的故事。", "The community": "社区", "Find your": "找到你的", "people.": "同好。", "Discover writers, meet new voices, and find your next favorite storyteller.": "发现作者、结识新声音，找到你喜欢的讲故事的人。", people: "位用户", "Search people by name or username": "按姓名或用户名搜索", "Updating...": "正在更新...", "No people found for": "未找到相关用户：", "Close menu": "关闭菜单", "Toggle menu": "切换菜单", "Main navigation": "主导航", "Small stories matter.": "小故事也很重要。", "Make room for yours.": "为你的故事留个位置。", "Open settings": "打开设置", "Sign in": "登录", "There are no published stories": "还没有已发布的故事", "yet.": "暂时。", "Be the first person to leave something kind on the table.": "来分享一段温暖的故事吧。", "A quiet place for": "一个安静的空间，", "good stories.": "留给好故事。", "Pull up a chair. There’s something new to read.": "坐下来，读读新故事吧。",
+    English: "英语", Translate: "翻译", "Hide translation": "隐藏翻译", "Translating...": "正在翻译...",
   },
   ar: {
     "Make Flip Stories feel right for you.": "خصّص Flip Stories كما تحب.",
@@ -206,6 +214,7 @@ const EXTRA_TRANSLATIONS: Record<Exclude<Language, "en">, Record<string, string>
     "Stories you’ve written and stories you’ve saved.": "القصص التي كتبتها وحفظتها.", "No saved stories yet.": "لا توجد قصص محفوظة بعد.", "Favorite stories in Discover and they’ll appear here.": "أضف القصص إلى المفضلة في اكتشف لتظهر هنا.",
     "Finding people...": "جارٍ البحث عن أشخاص...", "No profiles to discover yet.": "لا توجد ملفات شخصية لاكتشافها بعد.", "A Flip Stories community member.": "عضو في مجتمع Flip Stories.",
     "The reading room": "مساحة القراءة", "Stories from the community": "قصص المجتمع", "View all": "عرض الكل", "Search story titles": "ابحث عن عناوين القصص", Genre: "النوع", "Filter stories by genre": "تصفية القصص حسب النوع", "All genres": "كل الأنواع", Browse: "استكشاف", "Filter stories by popularity and length": "تصفية حسب الشعبية والطول", "All stories": "كل القصص", Popular: "الأكثر شعبية", Hot: "رائجة", "New / Recent": "حديثة", "Short read": "قراءة قصيرة", "Long read": "قراءة طويلة", "No stories match that search.": "لا توجد قصص تطابق بحثك.", "The community": "المجتمع", "Find your": "اعثر على", "people.": "أشخاص يشبهونك.", "Discover writers, meet new voices, and find your next favorite storyteller.": "اكتشف الكتّاب والأصوات الجديدة واعثر على حكّاءك المفضل التالي.", people: "أشخاص", "Search people by name or username": "ابحث بالاسم أو اسم المستخدم", "Updating...": "جارٍ التحديث...", "No people found for": "لم يتم العثور على أشخاص لـ", "Close menu": "إغلاق القائمة", "Toggle menu": "تبديل القائمة", "Main navigation": "التنقل الرئيسي", "Small stories matter.": "القصص الصغيرة مهمة.", "Make room for yours.": "اترك مساحة لقصتك.", "Open settings": "فتح الإعدادات", "Sign in": "تسجيل الدخول", "There are no published stories": "لا توجد قصص منشورة", "yet.": "حتى الآن.", "Be the first person to leave something kind on the table.": "كن أول من يشارك قصة لطيفة.", "A quiet place for": "مكان هادئ من أجل", "good stories.": "القصص الجميلة.", "Pull up a chair. There’s something new to read.": "اجلس واقرأ شيئًا جديدًا.",
+    English: "الإنجليزية", Translate: "ترجمة", "Hide translation": "إخفاء الترجمة", "Translating...": "جارٍ الترجمة...",
   },
 };
 const LanguageContext = createContext<Language>("en");
@@ -215,6 +224,97 @@ function translateText(language: Language, text: string) {
 function useTranslate() {
   const language = useContext(LanguageContext);
   return (text: string) => translateText(language, text);
+}
+function storyTextForTranslation(text: string) {
+  if (!/<(?:div|p|span|strong|b|em|i|br)\b/i.test(text)) return text;
+  const parsed = new DOMParser().parseFromString(sanitizeStoryMarkup(text), "text/html");
+  const appendText = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+    if (!(node instanceof HTMLElement)) return "";
+    if (node.tagName === "BR") return "\n";
+    const content = Array.from(node.childNodes, appendText).join("");
+    return ["DIV", "P"].includes(node.tagName) ? `${content}\n` : content;
+  };
+  return Array.from(parsed.body.childNodes, appendText).join("").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+function decodeTranslation(text: string) {
+  const entities: Record<string, string> = {
+    "&quot;": "\"",
+    "&#39;": "'",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&amp;": "&",
+  };
+  return text.replace(/&quot;|&#39;|&lt;|&gt;|&amp;/g, (entity) => entities[entity]);
+}
+function TranslationAction({
+  texts,
+  language,
+  children,
+}: {
+  texts: string[];
+  language: Language;
+  children: (translations: string[], languageLabel: string) => React.ReactNode;
+}) {
+  const t = useTranslate();
+  const signature = JSON.stringify([language, texts]);
+  const requestId = useRef(0);
+  const [translations, setTranslations] = useState<string[] | null>(null);
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const languageLabel = LANGUAGE_OPTIONS.find((option) => option.value === language)?.label ?? language;
+
+  useEffect(() => {
+    requestId.current += 1;
+    setTranslations(null);
+    setShowTranslation(false);
+    setLoading(false);
+    setError("");
+  }, [signature]);
+
+  if (language === "en" || !texts.some((text) => text.trim())) return null;
+
+  const translate = async () => {
+    if (translations) {
+      setShowTranslation((visible) => !visible);
+      return;
+    }
+
+    const currentRequestId = ++requestId.current;
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texts, targetLanguage: language }),
+      });
+      const result = await response.json() as { translations?: unknown; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Translation failed. Please try again.");
+      if (!Array.isArray(result.translations) || result.translations.length !== texts.length || !result.translations.every((item) => typeof item === "string")) {
+        throw new Error("Translation returned an unexpected response. Please try again.");
+      }
+      if (requestId.current !== currentRequestId) return;
+      setTranslations(result.translations.map(decodeTranslation));
+      setShowTranslation(true);
+    } catch (translationError) {
+      if (requestId.current !== currentRequestId) return;
+      setError(translationError instanceof Error ? translationError.message : "Translation failed. Please try again.");
+    } finally {
+      if (requestId.current === currentRequestId) setLoading(false);
+    }
+  };
+
+  return (
+    <div className="translation-action">
+      <button type="button" className="translation-button" onClick={(event) => { event.stopPropagation(); void translate(); }} disabled={loading}>
+        <Languages size={14} /> {loading ? t("Translating...") : showTranslation ? t("Hide translation") : t("Translate")}
+      </button>
+      {error && <p className="translation-error" role="alert">{error}</p>}
+      {translations && showTranslation && children(translations, languageLabel)}
+    </div>
+  );
 }
 const PROFILE_LINK_LIMIT = 3;
 const BLOCKED_PROFILE_LINK_PATTERNS = ["nsfw", "adult", "porn", "xxx", "sex", "18+", "18plus", "onlyfans", "fetish", "lewd", "nude", "erotic"];
@@ -1612,6 +1712,9 @@ function StoryCard({
   onAuthor: () => void;
   onMention: (username: string) => void;
 }) {
+  const language = useContext(LanguageContext);
+  const t = useTranslate();
+  const translationTexts = [story.title, storyTextForTranslation(story.excerpt)].filter((text) => text.trim());
   return (
     <article className="story-card" onClick={onRead} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onRead(); }} role="button" tabIndex={0}>
       <div className={`story-art story-art-${story.accent}`}>
@@ -1625,8 +1728,19 @@ function StoryCard({
           {story.pinLabel && <span className="pin-badge"><Pin size={11} /> {story.pinLabel}</span>}
           <span>{story.date}</span>
         </div>
+        {language !== "en" && <span className="translation-language-label original-language-label">{t("English")}</span>}
         <h3>{story.title}</h3>
         <p>{renderStoryText(story.excerpt, onMention, `excerpt-${story.id}`)}</p>
+        <TranslationAction texts={translationTexts} language={language}>
+          {(translated, languageLabel) => (
+            <div className="translation-result story-card-translation-result">
+              <span className="translation-slash" aria-hidden="true">/</span>
+              <span className="translation-language-label">{languageLabel}</span>
+              <h3>{translated[0]}</h3>
+              {translated[1] && <p>{translated[1]}</p>}
+            </div>
+          )}
+        </TranslationAction>
         <div className="story-card-bottom">
           <button type="button" className="author-chip" onClick={(event) => { event.stopPropagation(); onAuthor(); }} aria-label={`Open ${story.author}'s profile`}>
             {story.avatarUrl ? <img className="avatar avatar-image" src={story.avatarUrl} alt="" /> : <span className={`avatar avatar-${story.accent}`}>{story.initials}</span>}
@@ -3613,6 +3727,8 @@ function ReaderModal({
   setAuthMode: (mode: "login" | "signup") => void;
   setAuthOpen: (open: boolean) => void;
 }) {
+  const language = useContext(LanguageContext);
+  const t = useTranslate();
   const [pages, setPages] = useState<string[]>([story.excerpt]);
   const [pageIndex, setPageIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -3769,9 +3885,19 @@ function ReaderModal({
               {following ? "Following" : "Follow"}
             </button>
           </div>
+          {language !== "en" && <span className="translation-language-label original-language-label">{t("English")}</span>}
           <div className="reader-body">
             <FormattedStoryText text={pages[pageIndex] ?? ""} onMention={onMention} />
           </div>
+          <TranslationAction texts={[storyTextForTranslation(pages[pageIndex] ?? "")]} language={language}>
+            {(translated, languageLabel) => (
+              <div className="translation-result reader-translation-result">
+                <span className="translation-slash" aria-hidden="true">/</span>
+                <span className="translation-language-label">{languageLabel}</span>
+                <p>{translated[0]}</p>
+              </div>
+            )}
+          </TranslationAction>
           <div className="reader-pages"><button onClick={() => setPageIndex(Math.max(0, pageIndex - 1))} disabled={pageIndex === 0}><ChevronLeft size={16} /></button><span>Page {pageIndex + 1} of {pages.length}</span><button onClick={() => setPageIndex(Math.min(pages.length - 1, pageIndex + 1))} disabled={pageIndex === pages.length - 1}><ChevronRight size={16} /></button></div>
           <div className="reader-actions">
             <button onClick={onLike} className={liked ? "liked" : ""}>
@@ -3854,6 +3980,15 @@ function ReaderModal({
                           {Array.from({ length: 5 }, (_, index) => <Star key={index} size={13} fill={index < comment.rating! ? "currentColor" : "none"} />)}
                         </div>}
                         <p>{comment.content}</p>
+                        <TranslationAction texts={[comment.content]} language={language}>
+                          {(translated, languageLabel) => (
+                            <div className="translation-result comment-translation-result">
+                              <span className="translation-slash" aria-hidden="true">/</span>
+                              <span className="translation-language-label">{languageLabel}</span>
+                              <p>{translated[0]}</p>
+                            </div>
+                          )}
+                        </TranslationAction>
                         {user && (user.id === comment.userId || user.id === story.authorId) && (
                           <button className="comment-delete" type="button" onClick={() => void deleteComment(comment.id)}>Delete</button>
                         )}

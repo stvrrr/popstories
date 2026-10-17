@@ -83,6 +83,19 @@
 .story-art { display:none; }
 .story-card-main { padding:22px 25px 18px; }
 .story-card h3 { margin-top:10px; font-size:21px; }
+.original-language-label { display:block; margin-top:10px; }
+.translation-action { margin-top:10px; }
+.translation-button { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--sage); font-size:10px; font-weight:700; }
+.translation-button:hover:not(:disabled) { border-color:var(--sage); background:var(--sage-soft); }
+.translation-button:focus-visible { outline:2px solid var(--sage); outline-offset:2px; }
+.translation-error { margin:7px 0 0; color:var(--terra); font-size:10px; line-height:1.45; }
+.translation-result { display:grid; justify-items:start; gap:5px; margin-top:10px; padding-top:8px; border-top:1px solid var(--line); }
+.translation-language-label { color:var(--sage); font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
+.translation-slash { color:var(--faint); font-family:"Libre Baskerville",serif; font-size:17px; line-height:1; }
+.story-card-translation-result h3 { margin:1px 0 0; font-size:18px; }
+.story-card-translation-result p,.reader-translation-result p,.comment-translation-result p { margin:2px 0 0; color:var(--muted); font-size:11px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
+.reader-translation-result { margin-top:12px; }
+.comment-translation-result { margin-top:8px; }
 .story-card-bottom { margin-top:20px; }
 .shelf-wrap { max-width:1050px; }
 .shelf-section + .shelf-section { margin-top:46px; }
