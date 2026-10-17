@@ -972,7 +972,8 @@ export default function HomePage() {
           error={authError}
           loading={authLoading}
           onSubmit={handleAuth}
-            onDiscordLogin={handleDiscordLogin}
+          onDiscordLogin={handleDiscordLogin}
+          onResetComplete={() => { setAuthOpen(false); notify("Your password has been reset."); }}
           onClose={() => setAuthOpen(false)}
         />
       )}
@@ -1363,6 +1364,16 @@ function SettingsView({ user, theme, setTheme, mobileNavigation, setMobileNaviga
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [securityMessage, setSecurityMessage] = useState("");
+  const [securityError, setSecurityError] = useState("");
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [emailCurrentPassword, setEmailCurrentPassword] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailCodeSent, setEmailCodeSent] = useState(false);
   useEffect(() => {
     if (!user) { setLoading(false); return; }
     supabase.from("profiles").select("username,display_name,bio,avatar_url,profile_links").eq("id", user.id).maybeSingle().then(({ data }: { data: Profile | null }) => {
@@ -1414,6 +1425,103 @@ function SettingsView({ user, theme, setTheme, mobileNavigation, setMobileNaviga
       return;
     }
     setProfile({ ...profile, avatar_url: avatarUrl, profile_links: profileLinks }); setAvatarFile(null); await onSaved();
+  };
+  const verifyCurrentPassword = async (password: string) => {
+    if (!user?.email) {
+      setSecurityError("This account does not have an email and password sign-in method.");
+      return false;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: user.email, password });
+    if (error) {
+      setSecurityError(error.message);
+      return false;
+    }
+    return true;
+  };
+  const changePassword = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSecurityError("");
+    setSecurityMessage("");
+    if (newPassword !== confirmNewPassword) {
+      setSecurityError("The new passwords do not match.");
+      return;
+    }
+    setSecurityLoading(true);
+    try {
+      if (!await verifyCurrentPassword(currentPassword)) {
+        setSecurityLoading(false);
+        return;
+      }
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setSecurityError(error.message);
+        setSecurityLoading(false);
+        return;
+      }
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setSecurityMessage("Your password has been updated.");
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Password update failed. Please try again.");
+    }
+    setSecurityLoading(false);
+  };
+  const requestEmailChange = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSecurityError("");
+    setSecurityMessage("");
+    if (!user?.email) {
+      setSecurityError("This account does not have an email and password sign-in method.");
+      return;
+    }
+    if (newEmail.trim().toLowerCase() === user.email.toLowerCase()) {
+      setSecurityError("Enter a different email address.");
+      return;
+    }
+    setSecurityLoading(true);
+    try {
+      if (!await verifyCurrentPassword(emailCurrentPassword)) {
+        setSecurityLoading(false);
+        return;
+      }
+      const normalizedEmail = newEmail.trim().toLowerCase();
+      const { error } = await supabase.auth.updateUser({ email: normalizedEmail });
+      if (error) {
+        setSecurityError(error.message);
+        setSecurityLoading(false);
+        return;
+      }
+      setNewEmail(normalizedEmail);
+      setEmailCode("");
+      setEmailCodeSent(true);
+      setEmailCurrentPassword("");
+      setSecurityMessage(`A confirmation code was sent to ${normalizedEmail}.`);
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Email change could not be started.");
+    }
+    setSecurityLoading(false);
+  };
+  const confirmEmailChange = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSecurityError("");
+    setSecurityMessage("");
+    setSecurityLoading(true);
+    const { error } = await supabase.auth.verifyOtp({
+      email: newEmail,
+      token: emailCode.trim(),
+      type: "email_change",
+    });
+    if (error) {
+      setSecurityError(error.message);
+      setSecurityLoading(false);
+      return;
+    }
+    setEmailCodeSent(false);
+    setEmailCode("");
+    setNewEmail("");
+    setSecurityMessage("Your email address has been updated.");
+    setSecurityLoading(false);
   };
   const deleteAccount = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1539,6 +1647,39 @@ function SettingsView({ user, theme, setTheme, mobileNavigation, setMobileNaviga
             {message && <p className="profile-error">{message}</p>}
             <button className="publish-button" disabled={saving}>{saving ? "Saving..." : "Save profile"} <Check size={16} /></button>
           </form>
+          <section className="account-security-section" aria-labelledby="account-security-title">
+            <div className="settings-section-heading">
+              <div><span className="section-kicker">Sign-in details</span><h2 id="account-security-title">Account security</h2></div>
+              <p>Confirm changes with your current password.</p>
+            </div>
+            <form className="profile-form account-security-form" onSubmit={changePassword}>
+              <h3>Change password</h3>
+              <label>Current password<input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /></label>
+              <label>New password<input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={6} required /></label>
+              <label>Confirm new password<input type="password" autoComplete="new-password" value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} minLength={6} required /></label>
+              <button className="publish-button" type="submit" disabled={securityLoading}>{securityLoading ? "Updating..." : "Update password"}</button>
+            </form>
+            <form className="profile-form account-security-form" onSubmit={emailCodeSent ? confirmEmailChange : requestEmailChange}>
+              <h3>Change email</h3>
+              <p className="profile-hint">Current email: {user.email ?? "Not available"}</p>
+              {emailCodeSent ? (
+                <>
+                  <p className="profile-hint">Enter the confirmation code sent to {newEmail}.</p>
+                  <label>Email confirmation code<input inputMode="numeric" autoComplete="one-time-code" value={emailCode} onChange={(event) => setEmailCode(event.target.value)} required /></label>
+                  <button className="publish-button" type="submit" disabled={securityLoading}>{securityLoading ? "Verifying..." : "Confirm new email"}</button>
+                  <button className="text-button" type="button" onClick={() => { setEmailCodeSent(false); setEmailCode(""); setSecurityError(""); setSecurityMessage(""); }}>Use a different email</button>
+                </>
+              ) : (
+                <>
+                  <label>Current password<input type="password" autoComplete="current-password" value={emailCurrentPassword} onChange={(event) => setEmailCurrentPassword(event.target.value)} required /></label>
+                  <label>New email address<input type="email" autoComplete="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} required /></label>
+                  <button className="publish-button" type="submit" disabled={securityLoading}>{securityLoading ? "Sending code..." : "Send confirmation code"}</button>
+                </>
+              )}
+            </form>
+            {securityError && <p className="profile-error" role="alert">{securityError}</p>}
+            {securityMessage && <p className="security-success" role="status">{securityMessage}</p>}
+          </section>
           <section className="account-danger-zone" aria-labelledby="account-danger-title">
             <div>
               <h2 id="account-danger-title">Delete account</h2>
@@ -3350,6 +3491,7 @@ function AuthModal({
   loading,
   onSubmit,
   onDiscordLogin,
+  onResetComplete,
   onClose,
 }: {
   mode: "login" | "signup";
@@ -3362,8 +3504,89 @@ function AuthModal({
   loading: boolean;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   onDiscordLogin: () => Promise<void>;
+  onResetComplete: () => void;
   onClose: () => void;
 }) {
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [recoveryStep, setRecoveryStep] = useState<"request" | "code" | "password">("request");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryPasswordConfirm, setRecoveryPasswordConfirm] = useState("");
+  const [recoveryError, setRecoveryError] = useState("");
+  const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+
+  const requestRecoveryCode = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setRecoveryLoading(true);
+    setRecoveryError("");
+    setRecoveryMessage("");
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+    if (error) {
+      setRecoveryError(error.message);
+      setRecoveryLoading(false);
+      return;
+    }
+    setRecoveryStep("code");
+    setRecoveryMessage("If an account exists for this email, a recovery code has been sent.");
+    setRecoveryLoading(false);
+  };
+
+  const verifyRecoveryCode = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setRecoveryLoading(true);
+    setRecoveryError("");
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: recoveryCode.trim(),
+      type: "recovery",
+    });
+    if (error) {
+      setRecoveryError(error.message);
+      setRecoveryLoading(false);
+      return;
+    }
+    setRecoveryStep("password");
+    setRecoveryMessage("Code verified. Choose a new password.");
+    setRecoveryLoading(false);
+  };
+
+  const saveRecoveredPassword = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setRecoveryError("");
+    if (recoveryPassword !== recoveryPasswordConfirm) {
+      setRecoveryError("The new passwords do not match.");
+      return;
+    }
+    setRecoveryLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: recoveryPassword });
+    if (error) {
+      setRecoveryError(error.message);
+      setRecoveryLoading(false);
+      return;
+    }
+    onResetComplete();
+  };
+
+  const startForgotPassword = () => {
+    setForgotPassword(true);
+    setRecoveryStep("request");
+    setRecoveryCode("");
+    setRecoveryPassword("");
+    setRecoveryPasswordConfirm("");
+    setRecoveryError("");
+    setRecoveryMessage("");
+  };
+
+  const returnToLogin = () => {
+    setForgotPassword(false);
+    setRecoveryError("");
+    setRecoveryMessage("");
+    setRecoveryCode("");
+    setRecoveryPassword("");
+    setRecoveryPasswordConfirm("");
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <section
@@ -3381,64 +3604,113 @@ function AuthModal({
           <Coffee size={22} />
         </div>
         <p className="eyebrow">Flip Stories</p>
-        <h2>
-          {mode === "login" ? "Welcome back." : "Make room for your story."}
-        </h2>
+        <h2>{forgotPassword ? "Reset your password." : mode === "login" ? "Welcome back." : "Make room for your story."}</h2>
         <p className="auth-intro">
-          {mode === "login"
+          {forgotPassword
+            ? recoveryStep === "request"
+              ? "Enter your account email and we’ll send a recovery code."
+              : recoveryStep === "code"
+                ? `Enter the recovery code sent to ${email}.`
+                : "Choose a new password for your account."
+            : mode === "login"
             ? "Your little corner of the reading room is waiting."
             : "Create an account to write, save, and follow."}
         </p>
-        <form onSubmit={onSubmit} className="auth-form">
-          <label>
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              placeholder="you@example.com"
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              minLength={6}
-              placeholder="At least 6 characters"
-            />
-          </label>
-          {error && <p className="auth-error">{error}</p>}
-          <button className="publish-button auth-submit" disabled={loading}>
-            {loading
-              ? "Please wait..."
-              : mode === "login"
-                ? "Log in"
-                : "Create account"}
-          </button>
-        </form>
-        {mode === "login" && <>
-          <div className="auth-divider"><span>or</span></div>
-          <button type="button" className="discord-button" onClick={() => void onDiscordLogin()} disabled={loading}>
-            Continue with Discord
-          </button>
-        </>}
-        <p className="auth-switch">
-          {mode === "login"
-            ? "New to Flip Stories?"
-            : "Already have an account?"}{" "}
-          <button
-            onClick={() => {
-              setMode(mode === "login" ? "signup" : "login");
-            }}
+        {forgotPassword ? (
+          <form
+            onSubmit={recoveryStep === "request" ? requestRecoveryCode : recoveryStep === "code" ? verifyRecoveryCode : saveRecoveredPassword}
+            className="auth-form"
           >
-            {" "}
-            {mode === "login" ? "Create an account" : "Log in"}
-          </button>
-        </p>
+            {recoveryStep === "request" && (
+              <label>
+                Email
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" placeholder="you@example.com" />
+              </label>
+            )}
+            {recoveryStep === "code" && (
+              <>
+                <label>
+                  Recovery code
+                  <input inputMode="numeric" autoComplete="one-time-code" value={recoveryCode} onChange={(event) => setRecoveryCode(event.target.value)} required />
+                </label>
+                <button className="text-button auth-inline-button" type="button" onClick={() => setRecoveryStep("request")}>Use a different email or request another code</button>
+              </>
+            )}
+            {recoveryStep === "password" && (
+              <>
+                <label>
+                  New password
+                  <input type="password" value={recoveryPassword} onChange={(event) => setRecoveryPassword(event.target.value)} minLength={6} required autoComplete="new-password" />
+                </label>
+                <label>
+                  Confirm new password
+                  <input type="password" value={recoveryPasswordConfirm} onChange={(event) => setRecoveryPasswordConfirm(event.target.value)} minLength={6} required autoComplete="new-password" />
+                </label>
+              </>
+            )}
+            {recoveryError && <p className="auth-error" role="alert">{recoveryError}</p>}
+            {recoveryMessage && <p className="auth-success" role="status">{recoveryMessage}</p>}
+            <button className="publish-button auth-submit" disabled={recoveryLoading}>
+              {recoveryLoading ? "Please wait..." : recoveryStep === "request" ? "Send recovery code" : recoveryStep === "code" ? "Verify code" : "Save new password"}
+            </button>
+            <button className="text-button auth-inline-button" type="button" onClick={returnToLogin}>Back to log in</button>
+          </form>
+        ) : (
+          <>
+            <form onSubmit={onSubmit} className="auth-form">
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                  placeholder="you@example.com"
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="At least 6 characters"
+                />
+              </label>
+              {mode === "login" && <button className="text-button auth-inline-button" type="button" onClick={startForgotPassword}>Forgot password?</button>}
+              {error && <p className="auth-error">{error}</p>}
+              <button className="publish-button auth-submit" disabled={loading}>
+                {loading
+                  ? "Please wait..."
+                  : mode === "login"
+                    ? "Log in"
+                    : "Create account"}
+              </button>
+            </form>
+            {mode === "login" && <>
+              <div className="auth-divider"><span>or</span></div>
+              <button type="button" className="discord-button" onClick={() => void onDiscordLogin()} disabled={loading}>
+                Continue with Discord
+              </button>
+            </>}
+            <p className="auth-switch">
+              {mode === "login"
+                ? "New to Flip Stories?"
+                : "Already have an account?"}{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === "login" ? "signup" : "login");
+                }}
+              >
+                {" "}
+                {mode === "login" ? "Create an account" : "Log in"}
+              </button>
+            </p>
+          </>
+        )}
       </section>
     </div>
   );

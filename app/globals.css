@@ -139,6 +139,13 @@
 .profile-form textarea { min-height:90px; line-height:1.5; }
 .profile-form input:focus,.profile-form textarea:focus { border-color:var(--sage); }
 .profile-form .profile-hint { margin:-6px 0 0; color:var(--faint); font-size:9px; line-height:1.5; }
+.account-security-section { max-width:620px; margin-top:28px; }
+.account-security-section .settings-section-heading { margin-bottom:15px; }
+.account-security-form { max-width:none; margin-bottom:14px; padding:21px; }
+.account-security-form h3 { margin:0; color:var(--ink); font-family:"Libre Baskerville",serif; font-size:16px; font-weight:400; }
+.account-security-form .profile-hint { margin:0; }
+.security-success,.auth-success { margin:0; color:var(--sage); font-size:10px; line-height:1.5; }
+.auth-inline-button { justify-self:start; font-size:10px; }
 .profile-preview { display:flex; align-items:center; gap:13px; margin-bottom:8px; padding-bottom:20px; border-bottom:1px solid var(--line); }
 .profile-preview img { width:58px; height:58px; border-radius:50%; object-fit:cover; }
 .profile-preview > div:last-child { display:grid; gap:4px; }
