@@ -16,6 +16,13 @@ export default function DonationPanel({ address }: { address: string }) {
   const paymentUri = address && validAmount
     ? `litecoin:${address}?amount=${encodeURIComponent(amount)}`
     : "";
+  const trustWalletPaymentUrl = address && validAmount
+    ? `https://link.trustwallet.com/send?${new URLSearchParams({
+      asset: "c2",
+      address,
+      amount,
+    }).toString()}`
+    : "";
 
   useEffect(() => {
     if (!paymentUri) {
@@ -148,9 +155,9 @@ export default function DonationPanel({ address }: { address: string }) {
       </div>
 
       {address ? (
-        paymentUri ? (
-          <a className={styles.walletButton} href={paymentUri}>
-            <Wallet size={16} aria-hidden="true" /> Open in wallet
+        trustWalletPaymentUrl ? (
+          <a className={styles.walletButton} href={trustWalletPaymentUrl}>
+            <Wallet size={16} aria-hidden="true" /> Open in Trust Wallet
           </a>
         ) : (
           <button className={styles.walletButton} disabled type="button">
