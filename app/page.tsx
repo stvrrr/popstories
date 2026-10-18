@@ -1036,6 +1036,10 @@ export default function HomePage() {
             <span>{t("Settings")}</span>
           </button>
           {user?.id === ADMIN_USER_ID && <button className={`nav-item ${view === "Admin" ? "active" : ""}`} onClick={() => { setView("Admin"); setMenuOpen(false); }}><BarChart3 size={18} /><span>{t("Admin panel")}</span></button>}
+          <a className="nav-item" href="/donate" aria-label="Donate with Litecoin">
+            <Heart size={18} />
+            <span>Donate</span>
+          </a>
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-note">
@@ -1244,6 +1248,10 @@ export default function HomePage() {
             </button>
           );
         })}
+        <a href="/donate" aria-label="Donate with Litecoin">
+          <Heart size={18} />
+          <span>Donate</span>
+        </a>
       </nav>
       {readingStory && (
         <ReaderModal

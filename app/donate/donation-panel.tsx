@@ -165,7 +165,7 @@ export default function DonationPanel({ address }: { address: string }) {
 
       {!address && (
         <p className={styles.setupMessage}>
-          Preview mode — set <code>NEXT_PUBLIC_LITECOIN_ADDRESS</code> to your Litecoin receive address to activate donations.
+          Litecoin donations aren&apos;t available just yet. Please check back soon.
         </p>
       )}
       {qrError && <p className={styles.actionMessage} role="alert">{qrError}</p>}
