@@ -27,6 +27,62 @@ async function readLikeRequest(request) {
   return { storyId: payload.storyId, discordUserId: payload.discordUserId };
 }
 
+async function findDiscordAccountId(admin, discordUserId) {
+  for (let page = 1; page <= 100; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) return { error };
+
+    const user = (data.users ?? []).find((candidate) =>
+      (candidate.identities ?? []).some((identity) => {
+        if (identity.provider !== "discord") return false;
+        const identityData = identity.identity_data ?? {};
+        return identityData.provider_id === discordUserId || identityData.sub === discordUserId;
+      }),
+    );
+    if (user) return { userId: user.id };
+    if ((data.users ?? []).length < 1000) break;
+  }
+  return { userId: null };
+}
+
+async function toggleAccountLike(admin, storyId, userId, discordUserId) {
+  const { data: existing, error: existingError } = await admin
+    .from("likes")
+    .select("story_id")
+    .eq("story_id", storyId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) return { error: existingError };
+
+  const result = existing
+    ? await admin.from("likes").delete().eq("story_id", storyId).eq("user_id", userId)
+    : await admin.from("likes").insert({ story_id: storyId, user_id: userId });
+  if (result.error) return { error: result.error };
+
+  await admin
+    .from("discord_story_likes")
+    .delete()
+    .eq("story_id", storyId)
+    .eq("discord_user_id", discordUserId);
+
+  return { liked: !existing };
+}
+
+async function removeAccountLike(admin, storyId, userId, discordUserId) {
+  const { error } = await admin
+    .from("likes")
+    .delete()
+    .eq("story_id", storyId)
+    .eq("user_id", userId);
+  if (error) return { error };
+  await admin
+    .from("discord_story_likes")
+    .delete()
+    .eq("story_id", storyId)
+    .eq("discord_user_id", discordUserId);
+  return { error: null };
+}
+
 async function handleLike(request, action) {
   if (!isAuthorized(request)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,6 +94,31 @@ async function handleLike(request, action) {
   const admin = createAdminClient();
   if (!admin) {
     return Response.json({ error: "Discord likes are not configured" }, { status: 503 });
+  }
+
+  const accountResult = await findDiscordAccountId(admin, payload.discordUserId);
+  if (accountResult.error) {
+    return Response.json({ error: "Could not identify Discord account" }, { status: 500 });
+  }
+
+  if (accountResult.userId) {
+    const accountLikeResult = action === "toggle"
+      ? await toggleAccountLike(admin, payload.storyId, accountResult.userId, payload.discordUserId)
+      : await removeAccountLike(admin, payload.storyId, accountResult.userId, payload.discordUserId);
+    if (accountLikeResult.error) {
+      return Response.json({ error: "Could not update account story like" }, { status: 500 });
+    }
+
+    const likeCountResult = await getPublicStoryLikeCount(admin, payload.storyId);
+    if (likeCountResult.error) {
+      return Response.json({ error: "Could not load updated like count" }, { status: 500 });
+    }
+    return Response.json({
+      storyId: payload.storyId,
+      liked: action === "toggle" ? accountLikeResult.liked : false,
+      likeCount: likeCountResult.count,
+      linkedAccount: true,
+    }, { headers: { "Cache-Control": "no-store" } });
   }
 
   if (action === "toggle") {
