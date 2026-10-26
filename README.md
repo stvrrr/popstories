@@ -1,5 +1,11 @@
 # FlipStories
 
+## Security response headers
+
+The Next.js app sends a Content Security Policy, anti-framing and MIME-sniffing protections, a referrer policy, a restrictive permissions policy, and HSTS. The policy allows Google Fonts and HTTPS-hosted images; browser connections to Supabase are restricted to `NEXT_PUBLIC_SUPABASE_URL`. Set that variable in the deployment build environment so the policy matches the Supabase project. API responses are marked `Cache-Control: no-store`; the public static pages may still be cached.
+
+The app does not enable cross-origin API access. If a CDN or reverse proxy sits in front of Next.js, make sure it preserves these response headers and serves the site over HTTPS.
+
 ## Supabase email codes
 
 Password recovery and email changes use Supabase Auth one-time codes. In the Supabase Dashboard, open **Authentication → Email Templates** and make sure both the **Reset Password** and **Change Email Address** templates include the OTP value `{{ .Token }}` in the email body. The app asks users to enter that code; a template that only sends `{{ .ConfirmationURL }}` will not provide a code for these screens.
