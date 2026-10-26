@@ -706,6 +706,19 @@ export default function HomePage() {
       profiles: { username: string; display_name: string; avatar_url: string | null } | { username: string; display_name: string; avatar_url: string | null }[] | null;
       likes: Array<{ count: number }>;
     }>;
+    const { data: likeCounts, error: likeCountsError } = await supabase.rpc(
+      "get_public_story_like_counts",
+      { p_story_ids: loaded.map((story) => story.id) },
+    );
+    if (likeCountsError) {
+      console.error("Could not load story like counts.", likeCountsError);
+    }
+    const likeCountByStoryId = new Map<string, number>(
+      (likeCounts ?? []).map((row: { story_id: string; like_count: number }) => [
+        row.story_id,
+        Number(row.like_count),
+      ] as const),
+    );
     const pageContent = await Promise.all(loaded.map(async (story) => {
       const { data: pages } = await supabase.from("story_pages").select("content").eq("story_id", story.id);
       return pages?.map((page: { content: string }) => page.content).join(" ") ?? story.excerpt ?? "";
@@ -728,7 +741,7 @@ export default function HomePage() {
         date: new Date(story.created_at).toLocaleDateString(),
         createdAt: story.created_at,
         accent: ["sage", "terracotta", "mustard"][index % 3],
-        likes: story.likes?.[0]?.count ?? 0,
+        likes: likeCountByStoryId.get(story.id) ?? story.likes?.[0]?.count ?? 0,
         avatarUrl: profile?.avatar_url ?? "",
         isPinned: story.is_pinned ?? false,
         pinLabel: story.is_pinned ? story.pin_label : null,
@@ -2331,7 +2344,21 @@ function PublicProfile({
         profile_links: normalizeProfileLinks(profileRow.profile_links ?? []),
       } as Profile);
       const { data } = await supabase.from("stories").select("id,title,excerpt,category,created_at,profiles!stories_author_id_fkey(username,display_name,avatar_url),likes(count)").eq("author_id", profileRow.id).eq("status", "published").eq("visibility", "public").order("published_at", { ascending: false });
-      setStories((data ?? []).map((story: any, index: number) => ({ id: story.id, authorId: profileRow.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), createdAt: story.created_at, accent: ["sage", "terracotta", "mustard"][index % 3], likes: story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
+      const profileStories = data ?? [];
+      const { data: likeCounts, error: likeCountsError } = await supabase.rpc(
+        "get_public_story_like_counts",
+        { p_story_ids: profileStories.map((story: { id: string }) => story.id) },
+      );
+      if (likeCountsError) {
+        console.error("Could not load profile story like counts.", likeCountsError);
+      }
+      const likeCountByStoryId = new Map<string, number>(
+        (likeCounts ?? []).map((row: { story_id: string; like_count: number }) => [
+          row.story_id,
+          Number(row.like_count),
+        ] as const),
+      );
+      setStories(profileStories.map((story: any, index: number) => ({ id: story.id, authorId: profileRow.id, title: story.title, excerpt: story.excerpt ?? "", author: profileRow.display_name, handle: profileRow.username, initials: profileRow.display_name.slice(0, 2).toUpperCase(), category: story.category ?? "Personal essays", readTime: "5 min read", date: new Date(story.created_at).toLocaleDateString(), createdAt: story.created_at, accent: ["sage", "terracotta", "mustard"][index % 3], likes: likeCountByStoryId.get(story.id) ?? story.likes?.[0]?.count ?? 0, avatarUrl: profileRow.avatar_url ?? "" })));
       await loadFollowCounts(profileRow.id);
     };
     void load();

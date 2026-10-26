@@ -1,4 +1,4 @@
-# FlipStories
+# Flip Stories
 
 ## Security response headers
 
@@ -19,3 +19,11 @@ When a reader chooses to translate, the requested story or comment text is sent 
 ## Litecoin donations
 
 The donation preview is available at `/donate`. To enable it, copy your Litecoin **mainnet receive address** from Trust Wallet into `NEXT_PUBLIC_LITECOIN_ADDRESS` in `.env.local` (or set the same variable in your deployment environment), then restart or redeploy the app. The address is public by design; never put a recovery phrase or private key in the app. The page generates a Litecoin payment QR code and wallet link locally, and donations go directly to that address. Donors should send Litecoin on the Litecoin network only.
+
+## Discord story likes
+
+The Discord bot can like and unlike public, published stories without requiring readers to have Flip Stories accounts. Configure `BOT_SECRET_TOKEN` in the server environment and send it as a bearer token; keep it private to the bot and server. The bot provides the reader's Discord snowflake ID, and each Discord user can have one like per story.
+
+Apply the `20261026000000_discord_story_likes.sql` Supabase migration before using this endpoint.
+
+Use one Discord button for both liking and unliking. On every button interaction, send `POST /api/discord/likes` with JSON `{ "storyId": "<story UUID>", "discordUserId": "<clicking user's Discord snowflake>" }`. The endpoint atomically toggles that user's like and returns `{ "storyId": "...", "liked": true|false, "likeCount": number }`; update the button label or style using the returned `liked` state. `DELETE` on the same endpoint with the same JSON body removes the like without toggling. The like count includes both account-based and Discord likes. The Discord IDs themselves are private and are never returned by the API.
